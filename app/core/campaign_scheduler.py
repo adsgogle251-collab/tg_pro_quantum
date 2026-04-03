@@ -95,7 +95,7 @@ class CampaignScheduler:
         """Return accounts sorted by last_used_at for fair rotation."""
         active = [a for a in accounts if getattr(a, "status", None) == "active"]
         active.sort(
-            key=lambda a: getattr(a, "last_used_at", None) or datetime.min.replace(tzinfo=timezone.utc)
+            key=lambda a: getattr(a, "last_used_at", None) or datetime(1900, 1, 1, tzinfo=timezone.utc)
         )
         return active
 

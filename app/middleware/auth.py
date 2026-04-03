@@ -65,12 +65,22 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         redis = getattr(request.app.state, "redis", None)
         if redis:
             try:
-                from datetime import datetime, timedelta, timezone
+                from datetime import datetime, timezone
 
-                key = f"rate_limit:{request.state.user_id}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
-                count = await redis.incr(key)
-                if count == 1:
-                    await redis.expire(key, 60)
+                # Fixed 60-second window: key rotates every minute on the clock
+                window = datetime.now(timezone.utc).strftime('%Y%m%d%H%M')
+                key = f"rate_limit:{request.state.user_id}:{window}"
+                # Use a pipeline to atomically INCR + EXPIREAT at the start of the
+                # next minute boundary, giving a true fixed window.
+                pipe = redis.pipeline()
+                pipe.incr(key)
+                pipe.expireat(
+                    key,
+                    # next minute boundary
+                    int((datetime.now(timezone.utc).replace(second=0, microsecond=0).timestamp()) + 60),
+                )
+                results = await pipe.execute()
+                count = results[0]
                 if count > 300:
                     return JSONResponse(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,

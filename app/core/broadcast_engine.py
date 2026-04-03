@@ -11,9 +11,13 @@ class BroadcastEngine:
     """
     Multi-account broadcast engine with smart anti-ban delays,
     round-robin account rotation, retry logic, and loop mode.
+
+    Thread-safety note: _progress, _running, and _paused are protected by
+    _lock so concurrent coroutines reading/writing campaign state don't race.
     """
 
     def __init__(self):
+        self._lock = asyncio.Lock()
         self._running: Dict[int, bool] = {}
         self._paused: Dict[int, bool] = {}
         self._progress: Dict[int, Dict[str, Any]] = {}
@@ -24,17 +28,22 @@ class BroadcastEngine:
     def is_paused(self, campaign_id: int) -> bool:
         return self._paused.get(campaign_id, False)
 
-    def stop(self, campaign_id: int) -> None:
-        self._running[campaign_id] = False
+    async def stop(self, campaign_id: int) -> None:
+        async with self._lock:
+            self._running[campaign_id] = False
 
-    def pause(self, campaign_id: int) -> None:
-        self._paused[campaign_id] = True
+    async def pause(self, campaign_id: int) -> None:
+        async with self._lock:
+            self._paused[campaign_id] = True
 
-    def resume(self, campaign_id: int) -> None:
-        self._paused[campaign_id] = False
+    async def resume(self, campaign_id: int) -> None:
+        async with self._lock:
+            self._paused[campaign_id] = False
 
-    def get_progress(self, campaign_id: int) -> Dict[str, Any]:
-        return self._progress.get(campaign_id, {})
+    async def get_progress(self, campaign_id: int) -> Dict[str, Any]:
+        async with self._lock:
+            return dict(self._progress.get(campaign_id, {}))
+
 
     async def run_campaign(
         self,
@@ -51,19 +60,21 @@ class BroadcastEngine:
         on_message_sent: Optional[Callable] = None,
         on_message_failed: Optional[Callable] = None,
     ) -> Dict[str, Any]:
-        self._running[campaign_id] = True
-        self._paused[campaign_id] = False
-        self._progress[campaign_id] = {
-            "sent": 0,
-            "failed": 0,
-            "total": len(groups) * len(messages),
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        }
+        async with self._lock:
+            self._running[campaign_id] = True
+            self._paused[campaign_id] = False
+            self._progress[campaign_id] = {
+                "sent": 0,
+                "failed": 0,
+                "total": len(groups) * len(messages),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         active_accounts = [a for a in accounts if getattr(a, "status", None) == "active"]
         if not active_accounts:
             logger.error("Campaign %s: no active accounts", campaign_id)
-            self._running[campaign_id] = False
+            async with self._lock:
+                self._running[campaign_id] = False
             return {"error": "No active accounts available"}
 
         total_sent = 0
@@ -95,7 +106,8 @@ class BroadcastEngine:
                         svc = TelegramService(account)
                         await svc.send_message(group, message)
                         total_sent += 1
-                        self._progress[campaign_id]["sent"] = total_sent
+                        async with self._lock:
+                            self._progress[campaign_id]["sent"] = total_sent
                         logger.debug(
                             "Campaign %s: sent to group %s via account %s",
                             campaign_id,
@@ -106,7 +118,8 @@ class BroadcastEngine:
                             await on_message_sent(campaign_id, account, group, message)
                     except Exception as exc:
                         total_failed += 1
-                        self._progress[campaign_id]["failed"] = total_failed
+                        async with self._lock:
+                            self._progress[campaign_id]["failed"] = total_failed
                         logger.warning(
                             "Campaign %s: failed sending to group %s: %s",
                             campaign_id,
@@ -117,7 +130,9 @@ class BroadcastEngine:
                             await on_message_failed(campaign_id, account, group, message, exc)
 
                     if on_progress:
-                        await on_progress(campaign_id, self._progress[campaign_id])
+                        async with self._lock:
+                            snapshot = dict(self._progress[campaign_id])
+                        await on_progress(campaign_id, snapshot)
 
                     # Anti-ban delay
                     delay = random.uniform(delay_min, delay_max)
@@ -127,7 +142,8 @@ class BroadcastEngine:
             if not is_loop_infinite and iterations >= max(loop_count, 1):
                 break
 
-        self._running[campaign_id] = False
+        async with self._lock:
+            self._running[campaign_id] = False
         result = {
             "campaign_id": campaign_id,
             "total_sent": total_sent,
@@ -135,7 +151,8 @@ class BroadcastEngine:
             "iterations": iterations,
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
-        self._progress[campaign_id].update(result)
+        async with self._lock:
+            self._progress[campaign_id].update(result)
         logger.info("Campaign %s completed: %s", campaign_id, result)
         return result
 

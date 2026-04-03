@@ -1,7 +1,9 @@
+import json
 import logging
-from datetime import datetime, timedelta, timezone
+import secrets
+from datetime import timedelta, timezone, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,8 +29,11 @@ from app.utils.helpers import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# In-memory OTP store (replace with Redis in production)
-_otp_store: dict = {}
+_OTP_TTL_SECONDS = 600  # 10 minutes
+
+
+def _otp_key(phone: str) -> str:
+    return f"otp:{phone}"
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -73,30 +78,39 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/otp/request", status_code=status.HTTP_200_OK)
-async def request_otp(payload: OTPRequest):
-    import random
-
-    code = str(random.randint(100000, 999999))
-    _otp_store[payload.phone] = {
-        "code": code,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
-    }
-    # In production: send via SMS / email
+async def request_otp(payload: OTPRequest, request: Request):
+    code = str(secrets.randbelow(900000) + 100000)
+    redis = getattr(request.app.state, "redis", None)
+    if redis:
+        await redis.set(
+            _otp_key(payload.phone),
+            json.dumps({"code": code}),
+            ex=_OTP_TTL_SECONDS,
+        )
+    else:
+        # Fallback: warn and log (single-worker dev mode only)
+        logger.warning(
+            "Redis unavailable – OTP stored in log only. Not suitable for production."
+        )
     logger.info("OTP for %s: %s", payload.phone, code)
-    return {"message": "OTP sent", "expires_in": 600}
+    return {"message": "OTP sent", "expires_in": _OTP_TTL_SECONDS}
 
 
 @router.post("/otp/verify", status_code=status.HTTP_200_OK)
-async def verify_otp(payload: OTPVerify):
-    entry = _otp_store.get(payload.phone)
-    if entry is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not requested")
-    if datetime.now(timezone.utc) > entry["expires_at"]:
-        del _otp_store[payload.phone]
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired")
+async def verify_otp(payload: OTPVerify, request: Request):
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OTP service unavailable (Redis not connected)",
+        )
+    raw = await redis.get(_otp_key(payload.phone))
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not requested or expired")
+    entry = json.loads(raw)
     if entry["code"] != payload.code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP code")
-    del _otp_store[payload.phone]
+    await redis.delete(_otp_key(payload.phone))
     return {"message": "OTP verified successfully"}
 
 

@@ -94,3 +94,28 @@ def paginate(items: list, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
 def get_pagination_params(skip: int = 0, limit: int = 20) -> Dict[str, int]:
     page = (skip // limit) + 1 if limit > 0 else 1
     return {"page": page, "page_size": limit, "skip": skip, "limit": limit}
+
+
+# ── Celery async helper ───────────────────────────────────────────────────────
+
+import asyncio
+from typing import Callable, Coroutine
+
+
+def run_async(coro: Coroutine) -> Any:
+    """
+    Run an async coroutine from a synchronous Celery task context.
+
+    Creates a fresh event loop so Celery workers (which have no running loop)
+    can safely execute async code.  Using asyncio.run() directly is equivalent
+    on CPython, but this wrapper makes the intent explicit and allows us to
+    add per-task loop cleanup in the future.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            loop.close()
