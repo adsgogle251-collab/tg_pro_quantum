@@ -85,7 +85,7 @@ class AccountManager:
         active = [a for a in accounts if getattr(a, "status", None) == "active"]
         if not active:
             return None
-        active.sort(key=lambda a: getattr(a, "last_used_at", None) or datetime.min)
+        active.sort(key=lambda a: getattr(a, "last_used_at", None) or datetime.min.replace(tzinfo=timezone.utc))
         return active[0]
 
     async def disconnect_all(self) -> None:
