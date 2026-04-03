@@ -1,13 +1,46 @@
-customtkinter==5.2.0
-tkinterdnd2==0.4.2
-Pillow==10.1.0
-sqlalchemy==2.0.23
+# ── TG PRO QUANTUM - Production Dependencies ─────────────────────────────────
+
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Task queue
+celery[redis]==5.4.0
+redis==5.2.1
+
+# Pydantic & settings
+pydantic==2.10.4
+pydantic-settings==2.7.0
+pydantic[email]==2.10.4
+
+# Authentication
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+
+# Telegram
 telethon==1.34.0
-python-dotenv==1.0.0
-cryptography==41.0.7
-psutil==5.9.6
-aiofiles==23.2.1
-pandas==2.1.3
-openpyxl==3.1.2
-requests==2.31.0
-aiohttp==3.9.1
+
+# HTTP client (SMS Activate, webhooks)
+aiohttp==3.13.3
+httpx==0.28.1
+
+# Utilities
+python-dotenv==1.0.1
+cryptography==46.0.5
+aiofiles==24.1.0
+psutil==6.1.1
+
+# Data / exports
+pandas==2.2.3
+openpyxl==3.1.5
+requests==2.32.3
+
+# Legacy GUI deps (not required for API server)
+# customtkinter==5.2.0
+# tkinterdnd2==0.4.2
+# Pillow==10.1.0
