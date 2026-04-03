@@ -38,7 +38,7 @@ psutil==6.1.1
 # Data / exports
 pandas==2.2.3
 openpyxl==3.1.5
-requests==2.31.0
+requests==2.32.3
 
 # Legacy GUI deps (not required for API server)
 # customtkinter==5.2.0

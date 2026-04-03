@@ -47,8 +47,8 @@ class GroupManager:
         self,
         username: str,
         account_id: int,
+        db: AsyncSession,
         limit: int = 200,
-        db: AsyncSession = None,
     ) -> list:
         """Scrape members from a Telegram group."""
         from app.services.telegram_service import TelegramService

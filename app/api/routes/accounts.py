@@ -127,4 +127,11 @@ async def health_check(
     health = await acct_mgr.check_health(account)
     account.health_score = health.get("score", account.health_score)
     await db.flush()
-    return health
+    # Return sanitized result (no raw exception details to the caller)
+    return {
+        "account_id": health.get("account_id"),
+        "phone": health.get("phone"),
+        "score": health.get("score"),
+        "status": health.get("status"),
+        "checked_at": health.get("checked_at"),
+    }

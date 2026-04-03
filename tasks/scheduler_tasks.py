@@ -1,12 +1,11 @@
 """
 TG PRO QUANTUM - Celery Scheduled Tasks (Beat)
 """
-import asyncio
-
 from celery import Celery
 from celery.schedules import crontab
 
 from app.config import settings
+from tasks.utils import run_async
 
 celery_app = Celery(
     "tg_quantum_beat",
@@ -30,14 +29,6 @@ celery_app.conf.update(
 )
 
 
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
 @celery_app.task(name="tasks.scheduler_tasks.check_due_campaigns")
 def check_due_campaigns():
     """Scan for scheduled campaigns whose start time has arrived."""
@@ -49,7 +40,7 @@ def check_due_campaigns():
             count = await campaign_scheduler.check_due_campaigns(db)
             return count
 
-    return _run_async(_inner())
+    return run_async(_inner())
 
 
 @celery_app.task(name="tasks.scheduler_tasks.trigger_scheduled_campaign")
@@ -68,4 +59,4 @@ def trigger_scheduled_campaign(campaign_id: int):
                 task_id = await broadcast_engine.start_campaign(campaign, db)
                 return task_id
 
-    return _run_async(_inner())
+    return run_async(_inner())

@@ -52,9 +52,9 @@ class SMSActivateService:
             if text.startswith("STATUS_OK"):
                 code = text.split(":")[1]
                 return code
-            if text in ("STATUS_CANCEL", "STATUS_WAIT_CODE"):
-                if text == "STATUS_CANCEL":
-                    return None
+            if text == "STATUS_CANCEL":
+                return None
+            # STATUS_WAIT_CODE or other transient states – keep polling
             await asyncio.sleep(5)
         return None
 

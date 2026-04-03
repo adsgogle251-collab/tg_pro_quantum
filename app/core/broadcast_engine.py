@@ -81,7 +81,7 @@ class BroadcastEngine:
             group_result = await db.execute(
                 select(Group).where(
                     Group.id.in_(campaign.target_group_ids),
-                    Group.is_active == True,  # noqa: E712
+                    Group.is_active.is_(True),
                 )
             )
             groups = group_result.scalars().all()

@@ -35,7 +35,7 @@ class AccountManager:
         except Exception as exc:
             logger.warning("Health check failed for account %s: %s", account.id, exc)
             score = 0.0
-            status = f"error: {exc}"
+            status = "error"
 
         return {
             "account_id": account.id,

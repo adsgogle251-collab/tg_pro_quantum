@@ -47,9 +47,11 @@ class EmailService:
             return False
 
     def _smtp_send(self, to: str, msg: MIMEMultipart) -> None:
+        import ssl
+        context = ssl.create_default_context()
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
             server.ehlo()
-            server.starttls()
+            server.starttls(context=context)
             if settings.SMTP_USER and settings.SMTP_PASSWORD:
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.EMAIL_FROM, to, msg.as_string())

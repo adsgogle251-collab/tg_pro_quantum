@@ -30,7 +30,7 @@ async def list_groups(
     """List groups for the current client."""
     query = select(Group).where(Group.client_id == current_client.id)
     if active_only:
-        query = query.where(Group.is_active == True)  # noqa: E712
+        query = query.where(Group.is_active.is_(True))
     result = await db.execute(query)
     return result.scalars().all()
 

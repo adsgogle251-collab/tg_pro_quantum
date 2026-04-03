@@ -1,8 +1,6 @@
 """
 TG PRO QUANTUM - Celery Broadcast Tasks
 """
-import asyncio
-
 from celery import Celery
 
 from app.config import settings
@@ -24,13 +22,7 @@ celery_app.conf.update(
 )
 
 
-def _run_async(coro):
-    """Run an async coroutine inside a Celery (sync) worker."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+from tasks.utils import run_async
 
 
 @celery_app.task(bind=True, name="tasks.broadcast_tasks.run_broadcast_task", max_retries=1)
@@ -42,6 +34,6 @@ def run_broadcast_task(self, campaign_id: int):
     from app.core.broadcast_engine import broadcast_engine
 
     try:
-        _run_async(broadcast_engine._run_campaign(campaign_id))
+        run_async(broadcast_engine._run_campaign(campaign_id))
     except Exception as exc:
         raise self.retry(exc=exc, countdown=30)
