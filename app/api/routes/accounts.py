@@ -9,8 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
 from app.database import get_db
-from app.models.database import Client, TelegramAccount
-from app.models.schemas import AccountCreate, AccountResponse, AccountUpdate, MessageResponse
+from app.models.database import AccountStatus, Client, TelegramAccount
+from app.models.schemas import (
+    AccountCreate, AccountResponse, AccountUpdate, MessageResponse,
+    TelegramLoginRequest, TelegramLoginResponse, TelegramVerifyRequest,
+)
 from app.core.account_manager import account_manager as acct_mgr
 
 router = APIRouter(prefix="/accounts", tags=["Telegram Accounts"])
@@ -135,3 +138,79 @@ async def health_check(
         "status": health.get("status"),
         "checked_at": health.get("checked_at"),
     }
+
+
+# ── Telegram OTP Login (account onboarding) ───────────────────────────────────
+
+@router.post("/telegram/request-code", response_model=TelegramLoginResponse)
+async def request_telegram_code(
+    body: TelegramLoginRequest,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Step 1 of Telegram account login.
+
+    Sends an OTP to *phone* via the Telegram API.
+    Returns a ``phone_code_hash`` that must be passed to ``/telegram/verify``.
+    """
+    from app.services.telegram_service import TelegramService
+
+    svc = TelegramService()
+    try:
+        result = await svc.request_login_code(body.phone, body.api_id, body.api_hash)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return TelegramLoginResponse(**result)
+
+
+@router.post("/telegram/verify", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+async def verify_telegram_code(
+    body: TelegramVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Step 2 of Telegram account login.
+
+    Verifies the OTP for the account record identified by *account_id*,
+    persists the session string, and marks the account as ``active``.
+    """
+    from app.services.telegram_service import TelegramService
+
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == body.account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    if not account.api_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Account is missing api_id – update the account with a valid Telegram API ID first",
+        )
+    if not account.api_hash:
+        raise HTTPException(
+            status_code=422,
+            detail="Account is missing api_hash – update the account with a valid Telegram API hash first",
+        )
+
+    svc = TelegramService()
+    try:
+        session_string = await svc.complete_login(
+            phone=account.phone,
+            code=body.code,
+            phone_code_hash=body.phone_code_hash,
+            password=body.password,
+            api_id=account.api_id,
+            api_hash=account.api_hash,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    account.session_string = session_string
+    account.status = AccountStatus.active
+    await db.flush()
+    await db.refresh(account)
+    return account

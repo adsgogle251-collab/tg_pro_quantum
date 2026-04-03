@@ -153,3 +153,37 @@ async def bulk_import_groups(
 
     await db.flush()
     return MessageResponse(message=f"Imported {added} groups")
+
+
+@router.get("/{group_id}/members", response_model=dict)
+async def scrape_group_members(
+    group_id: int,
+    account_id: int = Query(..., description="Telegram account ID to use for scraping"),
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Scrape members from a Telegram group using the specified account.
+
+    Returns a list of member dicts and updates the group's member count.
+    """
+    result = await db.execute(select(Group).where(Group.id == group_id))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    _require_owns(group, current_client)
+
+    members = await group_manager.scrape_members(group.username, account_id, db, limit=limit)
+
+    # Update member count in DB
+    if members:
+        group.member_count = len(members)
+        await db.flush()
+
+    return {
+        "group_id": group.id,
+        "username": group.username,
+        "scraped_count": len(members),
+        "members": members,
+    }

@@ -172,3 +172,111 @@ class TelegramService:
                 await client.disconnect()
             except Exception:
                 pass
+
+    # ── Account onboarding (OTP login) ────────────────────────────────────────
+
+    def _get_fresh_client(self, api_id: int, api_hash: str):
+        """Create a Telethon client with a fresh in-memory session (for first login)."""
+        try:
+            from telethon import TelegramClient
+            from telethon.sessions import StringSession
+        except ImportError:
+            raise RuntimeError("telethon is not installed – pip install telethon")
+
+        return TelegramClient(
+            StringSession(),
+            api_id,
+            api_hash,
+            device_model="TG PRO QUANTUM",
+            app_version=settings.APP_VERSION,
+        )
+
+    async def request_login_code(
+        self,
+        phone: str,
+        api_id: int,
+        api_hash: str,
+    ) -> Dict:
+        """
+        Send a Telegram OTP to *phone*.
+
+        Returns::
+            {
+                "phone_code_hash": str,
+                "type": str,          # "app" or "sms"
+                "timeout": int,
+            }
+        """
+        from telethon import errors
+
+        client = self._get_fresh_client(api_id, api_hash)
+        try:
+            await client.connect()
+            result = await client.send_code_request(phone)
+            logger.info("OTP sent to %s", phone)
+            return {
+                "phone_code_hash": result.phone_code_hash,
+                "type": result.type.__class__.__name__,
+                "timeout": getattr(result, "timeout", 120),
+            }
+        except errors.FloodWaitError as e:
+            raise RuntimeError(f"FloodWait: retry in {e.seconds}s")
+        except errors.PhoneNumberBannedError:
+            raise RuntimeError("Phone number is banned")
+        except errors.PhoneNumberInvalidError:
+            raise RuntimeError("Invalid phone number format")
+        except Exception as exc:
+            logger.error("request_login_code %s: %s", phone, exc)
+            raise RuntimeError(f"Failed to send OTP: {exc}") from exc
+        finally:
+            # Disconnect but do NOT save session – it's just a temporary client
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
+    async def complete_login(
+        self,
+        phone: str,
+        code: str,
+        phone_code_hash: str,
+        password: str,
+        api_id: int,
+        api_hash: str,
+    ) -> str:
+        """
+        Complete Telegram OTP login for *phone*.
+
+        Returns the serialised Telethon StringSession string to persist.
+        """
+        from telethon import errors
+        from telethon.sessions import StringSession
+
+        client = self._get_fresh_client(api_id, api_hash)
+        try:
+            await client.connect()
+            try:
+                await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            except errors.SessionPasswordNeededError:
+                if not password:
+                    raise RuntimeError("2FA is enabled – provide your 2FA password")
+                await client.sign_in(password=password)
+
+            session_string = client.session.save()
+            logger.info("Login complete for %s", phone)
+            return session_string
+        except errors.PhoneCodeExpiredError:
+            raise RuntimeError("OTP code expired – request a new one")
+        except errors.PhoneCodeInvalidError:
+            raise RuntimeError("Invalid OTP code")
+        except errors.PasswordHashInvalidError:
+            raise RuntimeError("Incorrect 2FA password")
+        except Exception as exc:
+            logger.error("complete_login %s: %s", phone, exc)
+            raise RuntimeError(f"Login failed: {exc}") from exc
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
