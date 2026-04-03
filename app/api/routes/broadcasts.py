@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import func, select
@@ -65,7 +65,7 @@ async def send_broadcast(
 
     send_broadcast_task.delay(campaign_id)
     campaign.status = CampaignStatus.running
-    campaign.started_at = datetime.utcnow()
+    campaign.started_at = datetime.now(timezone.utc)
     await db.flush()
     return {"message": "Broadcast started", "campaign_id": campaign_id}
 
@@ -144,7 +144,7 @@ async def get_broadcast_progress(
 
     elapsed = 0.0
     if campaign.started_at:
-        elapsed = (datetime.utcnow() - campaign.started_at).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - campaign.started_at).total_seconds()
 
     rate = (sent / elapsed * 60) if elapsed > 0 else 0.0
     remaining = total - sent
@@ -174,7 +174,7 @@ async def stop_broadcast(
             detail="Campaign is not running",
         )
     campaign.status = CampaignStatus.failed
-    campaign.completed_at = datetime.utcnow()
+    campaign.completed_at = datetime.now(timezone.utc)
     await db.flush()
     return {"message": "Campaign stopped", "campaign_id": campaign_id}
 
@@ -297,7 +297,7 @@ async def websocket_live(campaign_id: int, websocket: WebSocket):
                         "sent": sent,
                         "failed": failed,
                         "progress_pct": round(progress, 2),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 )
             )

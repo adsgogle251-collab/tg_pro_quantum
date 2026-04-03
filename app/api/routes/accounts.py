@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -107,7 +107,7 @@ async def request_otp(
         phone_number=account.phone,
         activation_id=str(activation_id),
         status="pending",
-        expires_at=datetime.utcnow() + timedelta(minutes=10),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
     )
     db.add(verification)
     await db.flush()
@@ -148,7 +148,7 @@ async def verify_otp(
             detail="No pending verification found",
         )
 
-    if datetime.utcnow() > verification.expires_at:
+    if datetime.now(timezone.utc) > verification.expires_at:
         verification.status = "expired"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -157,7 +157,7 @@ async def verify_otp(
 
     verification.otp_code = payload.otp_code
     verification.status = "verified"
-    verification.verified_at = datetime.utcnow()
+    verification.verified_at = datetime.now(timezone.utc)
     account.status = "active"
     await db.flush()
 
@@ -189,7 +189,7 @@ async def get_account_status(
         phone=account.phone,
         status=account.status.value if hasattr(account.status, "value") else account.status,
         is_connected=account.status == "active",
-        last_checked=datetime.utcnow(),
+        last_checked=datetime.now(timezone.utc),
     )
 
 

@@ -1,6 +1,6 @@
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from jose import JWTError, jwt
@@ -26,7 +26,7 @@ def create_access_token(
     data: Dict[str, Any],
     expires_minutes: Optional[int] = None,
 ) -> str:
-    expire = datetime.utcnow() + timedelta(
+    expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload = {**data, "exp": expire, "type": "access"}
@@ -37,7 +37,7 @@ def create_refresh_token(
     data: Dict[str, Any],
     expires_days: Optional[int] = None,
 ) -> str:
-    expire = datetime.utcnow() + timedelta(
+    expire = datetime.now(timezone.utc) + timedelta(
         days=expires_days or settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
     payload = {**data, "exp": expire, "type": "refresh"}

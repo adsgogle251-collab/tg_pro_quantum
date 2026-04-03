@@ -112,7 +112,7 @@ class GroupManager:
         result = await db.execute(
             select(TelegramGroup).where(
                 TelegramGroup.client_id == client_id,
-                TelegramGroup.is_active == True,
+                TelegramGroup.is_active.is_(True),
             )
         )
         return result.scalars().all()

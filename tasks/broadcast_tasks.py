@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from celery_app import celery_app
 
@@ -87,7 +87,7 @@ def send_broadcast_task(self, campaign_id: int):
             )
 
             campaign.status = CampaignStatus.completed
-            campaign.completed_at = datetime.utcnow()
+            campaign.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info("Campaign %s broadcast task done: %s", campaign_id, result)
 
@@ -140,7 +140,7 @@ def update_campaign_status_task(campaign_id: int, new_status: str):
             if campaign:
                 campaign.status = CampaignStatus(new_status)
                 if new_status == "completed":
-                    campaign.completed_at = datetime.utcnow()
+                    campaign.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
     asyncio.run(_run())

@@ -1,6 +1,6 @@
 import base64
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class AccountManager:
         try:
             session_string = client.session.save()
             account.session_data = session_string
-            account.updated_at = datetime.utcnow()
+            account.updated_at = datetime.now(timezone.utc)
             await db.flush()
             logger.debug("Session saved for account %s", account.id)
         except Exception as exc:
@@ -52,7 +52,7 @@ class AccountManager:
             "phone": account.phone,
             "is_healthy": False,
             "status": account.status,
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
         try:
             client = await self.load_session(account)

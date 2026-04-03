@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class CampaignScheduler:
         from celery_app import celery_app
         from tasks.broadcast_tasks import send_broadcast_task
 
-        eta = scheduled_at if scheduled_at > datetime.utcnow() else None
+        eta = scheduled_at if scheduled_at > datetime.now(timezone.utc) else None
 
         if cron_expression and is_loop_infinite:
             # Use Celery Beat periodic task

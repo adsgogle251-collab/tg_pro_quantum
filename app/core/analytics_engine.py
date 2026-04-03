@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -69,7 +69,7 @@ class AnalyticsEngine:
         analytics.total_failed = failed
         analytics.total_pending = pending
         analytics.delivery_rate = round(delivery_rate, 4)
-        analytics.last_updated = datetime.utcnow()
+        analytics.last_updated = datetime.now(timezone.utc)
         await self.db.flush()
         return analytics
 

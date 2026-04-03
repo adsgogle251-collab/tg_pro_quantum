@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from celery_app import celery_app
 
@@ -19,7 +19,7 @@ def execute_scheduled_campaign_task():
         from app.models.database import Campaign, CampaignStatus
         from sqlalchemy import select
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as db:
             result = await db.execute(
                 select(Campaign).where(
@@ -55,7 +55,7 @@ def cleanup_old_data_task(days: int = 30):
         from app.models.database import BroadcastHistory, BroadcastQueue, QueueStatus
         from sqlalchemy import delete
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         async with AsyncSessionLocal() as db:
             # Remove completed/failed queue entries older than cutoff
             await db.execute(

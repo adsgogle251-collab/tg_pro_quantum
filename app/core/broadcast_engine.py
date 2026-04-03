@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class BroadcastEngine:
             "sent": 0,
             "failed": 0,
             "total": len(groups) * len(messages),
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
         }
 
         active_accounts = [a for a in accounts if getattr(a, "status", None) == "active"]
@@ -133,7 +133,7 @@ class BroadcastEngine:
             "total_sent": total_sent,
             "total_failed": total_failed,
             "iterations": iterations,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
         }
         self._progress[campaign_id].update(result)
         logger.info("Campaign %s completed: %s", campaign_id, result)
@@ -165,7 +165,7 @@ class BroadcastEngine:
                     svc = TelegramService(item.account)
                     await svc.send_message(item.group, item.message)
                     item.status = "sent"
-                    item.processed_at = datetime.utcnow()
+                    item.processed_at = datetime.now(timezone.utc)
                     sent += 1
                     break
                 except Exception as exc:

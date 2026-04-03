@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import aiohttp
@@ -62,8 +62,8 @@ class OTPManager:
 
     async def get_otp_code(self, activation_id: str, timeout: int = OTP_TIMEOUT) -> str:
         """Poll for OTP code until received or timeout."""
-        deadline = datetime.utcnow() + timedelta(seconds=timeout)
-        while datetime.utcnow() < deadline:
+        deadline = datetime.now(timezone.utc) + timedelta(seconds=timeout)
+        while datetime.now(timezone.utc) < deadline:
             response = await self._request(
                 {
                     "action": "getStatus",

@@ -65,9 +65,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         redis = getattr(request.app.state, "redis", None)
         if redis:
             try:
-                from datetime import datetime
+                from datetime import datetime, timedelta, timezone
 
-                key = f"rate_limit:{request.state.user_id}:{datetime.utcnow().strftime('%Y%m%d%H%M')}"
+                key = f"rate_limit:{request.state.user_id}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
                 count = await redis.incr(key)
                 if count == 1:
                     await redis.expire(key, 60)

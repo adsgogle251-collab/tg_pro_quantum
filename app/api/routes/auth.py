@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -79,7 +79,7 @@ async def request_otp(payload: OTPRequest):
     code = str(random.randint(100000, 999999))
     _otp_store[payload.phone] = {
         "code": code,
-        "expires_at": datetime.utcnow() + timedelta(minutes=10),
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
     }
     # In production: send via SMS / email
     logger.info("OTP for %s: %s", payload.phone, code)
@@ -91,7 +91,7 @@ async def verify_otp(payload: OTPVerify):
     entry = _otp_store.get(payload.phone)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not requested")
-    if datetime.utcnow() > entry["expires_at"]:
+    if datetime.now(timezone.utc) > entry["expires_at"]:
         del _otp_store[payload.phone]
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired")
     if entry["code"] != payload.code:

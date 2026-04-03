@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 import redis.asyncio as aioredis
@@ -90,7 +90,7 @@ async def rate_limiter(
     limit: int = 100,
     window: int = 60,
 ) -> Dict[str, Any]:
-    key = f"rate_limit:{current_user.id}:{datetime.utcnow().strftime('%Y%m%d%H%M')}"
+    key = f"rate_limit:{current_user.id}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
     try:
         count = await redis.incr(key)
         if count == 1:
