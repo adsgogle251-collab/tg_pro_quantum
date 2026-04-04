@@ -257,8 +257,7 @@ async def broadcast_overview(
             # Normalise to timezone-aware for comparison (SQLite stores naive datetimes)
             ts = c.created_at
             if ts.tzinfo is None:
-                from datetime import timezone as _tz
-                ts = ts.replace(tzinfo=_tz.utc)
+                ts = ts.replace(tzinfo=timezone.utc)
             if ts >= cutoff:
                 total_sent_24h += c.sent_count or 0
                 total_targets_24h += c.total_targets or 0
@@ -290,8 +289,7 @@ async def broadcast_overview(
         if camp.created_at:
             ts = camp.created_at
             if ts.tzinfo is None:
-                from datetime import timezone as _tz
-                ts = ts.replace(tzinfo=_tz.utc)
+                ts = ts.replace(tzinfo=timezone.utc)
             elapsed = (now - ts).total_seconds() / 60
 
         cards.append(
