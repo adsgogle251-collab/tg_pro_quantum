@@ -1,0 +1,257 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Prometheus Alert Rules (Production)
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+  # ── API Alerts ──────────────────────────────────────────────────────────────
+  - name: tgpq_api_critical
+    interval: 15s
+    rules:
+      # Error rate > 1% – CRITICAL
+      - alert: ErrorRateCritical
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: High HTTP error rate ({{ $value | humanizePercentage }})"
+          description: "Production API error rate exceeded 1% for 2 minutes. Current: {{ $value | humanizePercentage }}"
+          runbook: "https://docs.tg-pro-quantum.app/runbooks/high-error-rate"
+
+      # Error rate > 0.5% – WARNING
+      - alert: ErrorRateWarning
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.005
+        for: 2m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: Elevated HTTP error rate ({{ $value | humanizePercentage }})"
+          description: "Production API error rate exceeded 0.5% for 2 minutes."
+
+      # Response time > 500ms p95 – CRITICAL
+      - alert: ResponseTimeCritical
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: API response time p95 = {{ $value | humanizeDuration }}"
+          description: "Production API 95th percentile response time exceeded 500ms."
+
+      # Response time > 200ms p95 – WARNING
+      - alert: ResponseTimeWarning
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.2
+        for: 3m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: API response time p95 = {{ $value | humanizeDuration }}"
+          description: "Production API 95th percentile response time exceeded 200ms."
+
+      # Service down – CRITICAL
+      - alert: APIServiceDown
+        expr: up{job=~"tgpq_app_.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: API instance {{ $labels.instance }} is DOWN"
+          description: "Production API instance {{ $labels.instance }} has been unreachable for 1 minute."
+          runbook: "https://docs.tg-pro-quantum.app/runbooks/service-down"
+
+  # ── Resource Alerts ──────────────────────────────────────────────────────────
+  - name: tgpq_resources
+    interval: 60s
+    rules:
+      # Memory > 90% – CRITICAL
+      - alert: MemoryUsageCritical
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+        for: 3m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: Memory usage {{ $value | humanizePercentage }}"
+          description: "Host memory usage exceeded 90% for 3 minutes."
+
+      # Memory > 80% – WARNING
+      - alert: MemoryUsageWarning
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: Memory usage {{ $value | humanizePercentage }}"
+          description: "Host memory usage exceeded 80% for 5 minutes."
+
+      # CPU > 95% – CRITICAL
+      - alert: CPUUsageCritical
+        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.95
+        for: 3m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: CPU usage {{ $value | humanizePercentage }}"
+          description: "Host CPU usage exceeded 95% for 3 minutes."
+
+      # CPU > 80% – WARNING
+      - alert: CPUUsageWarning
+        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: CPU usage {{ $value | humanizePercentage }}"
+          description: "Host CPU usage exceeded 80% for 5 minutes."
+
+      # Disk < 10% – CRITICAL
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.10
+        for: 2m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: Disk space < 10% on {{ $labels.mountpoint }}"
+          description: "Disk free space on {{ $labels.mountpoint }} is below 10%."
+
+      # Disk < 20% – WARNING
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.20
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: Disk space < 20% on {{ $labels.mountpoint }}"
+          description: "Disk free space on {{ $labels.mountpoint }} is below 20%."
+
+  # ── Database Alerts ──────────────────────────────────────────────────────────
+  - name: tgpq_database
+    interval: 30s
+    rules:
+      # PostgreSQL down – CRITICAL
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: PostgreSQL is DOWN"
+          description: "Production PostgreSQL has been unreachable for 1 minute."
+          runbook: "https://docs.tg-pro-quantum.app/runbooks/database-down"
+
+      # Connection pool > 80% – WARNING
+      - alert: DBConnectionPoolHighUsage
+        expr: pg_stat_activity_count > pg_settings_max_connections * 0.80
+        for: 2m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: DB connection pool at {{ $value | humanizePercentage }}"
+          description: "PostgreSQL connections are above 80% of max_connections."
+
+  # ── Redis Alerts ─────────────────────────────────────────────────────────────
+  - name: tgpq_redis
+    interval: 30s
+    rules:
+      # Redis down – CRITICAL
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: Redis is DOWN"
+          description: "Production Redis has been unreachable for 1 minute."
+          runbook: "https://docs.tg-pro-quantum.app/runbooks/redis-down"
+
+      # Redis memory > 85% – WARNING
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: Redis memory at {{ $value | humanizePercentage }}"
+          description: "Redis is using more than 85% of configured max memory."
+
+  # ── Broadcast / Business Alerts ───────────────────────────────────────────
+  - name: tgpq_broadcast
+    interval: 60s
+    rules:
+      # WebSocket latency > 5s – CRITICAL
+      - alert: WebSocketLatencyCritical
+        expr: histogram_quantile(0.95, sum(rate(websocket_message_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 3m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: WebSocket latency p95 = {{ $value | humanizeDuration }}"
+          description: "Production WebSocket 95th percentile latency exceeded 5 seconds."
+
+      # WebSocket latency > 2s – WARNING
+      - alert: WebSocketLatencyWarning
+        expr: histogram_quantile(0.95, sum(rate(websocket_message_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 3m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: WebSocket latency p95 = {{ $value | humanizeDuration }}"
+          description: "Production WebSocket 95th percentile latency exceeded 2 seconds."
+
+      # Campaign success rate < 80% – CRITICAL
+      - alert: CampaignSuccessRateCritical
+        expr: |
+          (
+            sum(rate(broadcast_messages_sent_total[15m]))
+            /
+            (sum(rate(broadcast_messages_sent_total[15m])) + sum(rate(broadcast_messages_failed_total[15m])))
+          ) < 0.80
+        for: 5m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "CRITICAL: Campaign success rate {{ $value | humanizePercentage }}"
+          description: "Broadcast campaign success rate dropped below 80% for 5 minutes."
+
+      # Campaign success rate < 90% – WARNING
+      - alert: CampaignSuccessRateWarning
+        expr: |
+          (
+            sum(rate(broadcast_messages_sent_total[15m]))
+            /
+            (sum(rate(broadcast_messages_sent_total[15m])) + sum(rate(broadcast_messages_failed_total[15m])))
+          ) < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "WARNING: Campaign success rate {{ $value | humanizePercentage }}"
+          description: "Broadcast campaign success rate dropped below 90% for 5 minutes."

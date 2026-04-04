@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Alertmanager Production Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  resolve_timeout: 5m
+  smtp_from: alerts@tg-pro-quantum.app
+  smtp_smarthost: smtp.example.com:587
+  smtp_auth_username: alerts@tg-pro-quantum.app
+  smtp_auth_password: CHANGE_ME
+  smtp_require_tls: true
+  slack_api_url: https://hooks.slack.com/services/CHANGE_ME
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+# ── Route tree ───────────────────────────────────────────────────────────────
+route:
+  receiver: default-receiver
+  group_by: [alertname, environment, severity]
+  group_wait:      30s
+  group_interval:  5m
+  repeat_interval: 2h
+
+  routes:
+    # Critical – immediate page + Slack
+    - match:
+        severity: critical
+      receiver: critical-receiver
+      group_wait: 10s
+      repeat_interval: 15m
+      continue: false
+
+    # Warning – Slack only
+    - match:
+        severity: warning
+      receiver: warning-receiver
+      group_wait: 1m
+      repeat_interval: 4h
+
+# ── Receivers ────────────────────────────────────────────────────────────────
+receivers:
+  - name: default-receiver
+    slack_configs:
+      - channel: "#tgpq-prod-alerts"
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Environment:* production
+          {{ if .Annotations.runbook }}*Runbook:* {{ .Annotations.runbook }}{{ end }}
+          {{ end }}
+
+  - name: critical-receiver
+    slack_configs:
+      - channel: "#tgpq-prod-critical"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '🚨 PRODUCTION CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ if .Annotations.runbook }}*Runbook:* {{ .Annotations.runbook }}{{ end }}
+          {{ end }}
+    email_configs:
+      - to: team@tg-pro-quantum.app
+        send_resolved: true
+        subject: '[CRITICAL] Production Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2 style="color:red">PRODUCTION CRITICAL ALERT</h2>
+          <h3>{{ .GroupLabels.alertname }}</h3>
+          {{ range .Alerts }}
+          <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Details:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          {{ if .Annotations.runbook }}<p><a href="{{ .Annotations.runbook }}">Runbook</a></p>{{ end }}
+          {{ end }}
+    pagerduty_configs:
+      - routing_key: CHANGE_ME_PAGERDUTY_KEY
+        description: '{{ .GroupLabels.alertname }}: {{ (index .Alerts 0).Annotations.summary }}'
+        severity: critical
+
+  - name: warning-receiver
+    slack_configs:
+      - channel: "#tgpq-prod-alerts"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: '⚠️ Production WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+
+# ── Inhibit rules ─────────────────────────────────────────────────────────────
+inhibit_rules:
+  # Suppress warnings when a critical alert is already firing for the same metric
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: [alertname, environment]
+
+  # Suppress API alerts when host is down
+  - source_match:
+      alertname: APIServiceDown
+    target_match_re:
+      alertname: "(ErrorRateCritical|ErrorRateWarning|ResponseTimeCritical)"
+    equal: [environment]

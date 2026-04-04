@@ -1,0 +1,104 @@
+{
+  "version": "8.12.0",
+  "objects": [
+    {
+      "id": "tgpq-error-logs",
+      "type": "index-pattern",
+      "attributes": {
+        "title": "tgpq-logs-*",
+        "timeFieldName": "@timestamp"
+      }
+    },
+    {
+      "id": "tgpq-search-errors",
+      "type": "search",
+      "attributes": {
+        "title": "Production – Error Logs",
+        "description": "All error-level log events from production",
+        "columns": ["@timestamp", "service", "level", "message", "request_id"],
+        "sort": [["@timestamp", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"query\":{\"match\":{\"level\":{\"query\":\"error\",\"type\":\"phrase\"}}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-search-app",
+      "type": "search",
+      "attributes": {
+        "title": "Production – Application Logs",
+        "description": "All FastAPI application logs",
+        "columns": ["@timestamp", "level", "message", "path", "status_code", "duration_ms"],
+        "sort": [["@timestamp", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"query\":{\"match\":{\"service\":{\"query\":\"fastapi\",\"type\":\"phrase\"}}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-search-websocket",
+      "type": "search",
+      "attributes": {
+        "title": "Production – WebSocket Logs",
+        "description": "WebSocket connection and message logs",
+        "columns": ["@timestamp", "client_id", "message", "latency_ms"],
+        "sort": [["@timestamp", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"query\":{\"match\":{\"path\":{\"query\":\"/ws\",\"type\":\"phrase\"}}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-search-database",
+      "type": "search",
+      "attributes": {
+        "title": "Production – Database Logs",
+        "description": "Slow queries and database errors",
+        "columns": ["@timestamp", "query", "duration_ms", "error"],
+        "sort": [["@timestamp", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"query\":{\"match\":{\"service\":{\"query\":\"database\",\"type\":\"phrase\"}}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-search-performance",
+      "type": "search",
+      "attributes": {
+        "title": "Production – Performance Logs",
+        "description": "Slow API requests (>100ms)",
+        "columns": ["@timestamp", "path", "method", "status_code", "duration_ms", "client_id"],
+        "sort": [["duration_ms", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"range\":{\"duration_ms\":{\"gte\":100}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-search-audit",
+      "type": "search",
+      "attributes": {
+        "title": "Production – Audit Logs",
+        "description": "Authentication and security audit trail",
+        "columns": ["@timestamp", "user_id", "client_id", "action", "ip_address", "result"],
+        "sort": [["@timestamp", "desc"]],
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"index\":\"tgpq-logs-*\",\"filter\":[{\"query\":{\"match\":{\"log_type\":{\"query\":\"audit\",\"type\":\"phrase\"}}}}],\"query\":{\"language\":\"kuery\",\"query\":\"\"}}"
+        }
+      }
+    },
+    {
+      "id": "tgpq-dashboard-main",
+      "type": "dashboard",
+      "attributes": {
+        "title": "TG PRO QUANTUM – Production Logs Dashboard",
+        "description": "Unified log view for production environment",
+        "panelsJSON": "[]",
+        "timeRestore": false,
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"query\":{\"language\":\"kuery\",\"query\":\"\"},\"filter\":[]}"
+        }
+      }
+    }
+  ]
+}
