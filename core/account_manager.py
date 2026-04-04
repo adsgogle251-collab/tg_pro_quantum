@@ -16,6 +16,8 @@ class AccountStatus(Enum):
     SESSION_EXPIRED = "session_expired"
 
 class AccountManager:
+    SUPPORTED_FEATURES = ["broadcast", "campaign", "finder", "scrape", "join", "ai_cs", "analytics", "crm", "cs"]
+
     def __init__(self):
         self.accounts_file = ACCOUNTS_FILE
         self.groups_file = GROUPS_FILE
@@ -326,8 +328,7 @@ class AccountManager:
     
     def get_featured_accounts(self) -> Dict:
         """Get {feature: [account_names]} mapping"""
-        features = ["broadcast", "campaign", "finder", "scrape", "join", "ai_cs", "analytics", "crm", "cs"]
-        result = {f: [] for f in features}
+        result = {f: [] for f in self.SUPPORTED_FEATURES}
         for name, acc in self.accounts.items():
             for feature in acc.get("features", []):
                 if feature in result:

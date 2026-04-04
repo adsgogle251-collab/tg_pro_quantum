@@ -172,7 +172,7 @@ __all__ = [
     "billing_engine",
     "whitelabel_manager",
     "gdpr_compliance",
-    "state_manager", "t",
+    "t",
     
     # === PHASE 4-5 Modules & Instances ===
     "templates", "template_manager",
