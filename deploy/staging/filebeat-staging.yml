@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Filebeat Staging Configuration
+# Ships application logs → Elasticsearch
+# ─────────────────────────────────────────────────────────────────────────────
+
+filebeat.inputs:
+  # Application JSON logs
+  - type: log
+    enabled: true
+    paths:
+      - /app/logs/*.log
+      - /app/logs/*.json
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+    fields:
+      service: tgpq-api
+      environment: staging
+    fields_under_root: true
+
+  # Docker container logs
+  - type: container
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    processors:
+      - add_docker_metadata:
+          host: unix:///var/run/docker.sock
+
+# ── Processors ───────────────────────────────────────────────────────────────
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+  - drop_fields:
+      fields: [agent.ephemeral_id, agent.hostname, agent.id, agent.version]
+      ignore_missing: true
+
+# ── Output: Elasticsearch ─────────────────────────────────────────────────────
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "tgpq-staging-%{+yyyy.MM.dd}"
+  template.name: "tgpq-staging"
+  template.pattern: "tgpq-staging-*"
+
+# ── Index lifecycle management ────────────────────────────────────────────────
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "tgpq-staging"
+setup.ilm.pattern: "{now/d}-000001"
+setup.ilm.policy_name: "tgpq-staging-policy"
+
+# ── Kibana setup ─────────────────────────────────────────────────────────────
+setup.kibana:
+  host: "kibana:5601"
+  space.id: staging
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging.level: warning
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+  keepfiles: 7
+  permissions: 0600
+
+# ── Monitoring ───────────────────────────────────────────────────────────────
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["elasticsearch:9200"]

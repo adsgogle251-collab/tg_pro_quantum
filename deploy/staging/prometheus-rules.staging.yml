@@ -1,0 +1,161 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Prometheus Alert Rules (Staging)
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+  - name: tgpq_api_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          environment: staging
+        annotations:
+          summary: "High HTTP error rate ({{ $value | humanizePercentage }})"
+          description: "API error rate is above 1% for 2 minutes. Current: {{ $value | humanizePercentage }}"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "High API response time (p95 = {{ $value | humanizeDuration }})"
+          description: "95th percentile response time is above 500ms for 2 minutes."
+
+      # API down
+      - alert: APIDown
+        expr: up{job="tgpq_app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: staging
+        annotations:
+          summary: "API service is down"
+          description: "TG PRO QUANTUM API has been down for 1 minute."
+
+  - name: tgpq_resource_alerts
+    interval: 60s
+    rules:
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "High memory usage ({{ $value | humanizePercentage }})"
+          description: "Memory usage is above 80% for 5 minutes."
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "High CPU usage ({{ $value | humanizePercentage }})"
+          description: "CPU usage is above 90% for 5 minutes."
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.20
+        for: 5m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "Low disk space ({{ $value | humanizePercentage }} free)"
+          description: "Disk space is below 20% on {{ $labels.mountpoint }}."
+
+  - name: tgpq_database_alerts
+    interval: 30s
+    rules:
+      # Database down
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: staging
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been unreachable for 1 minute."
+
+      # Database connection pool exhausted
+      - alert: DBConnectionPoolExhausted
+        expr: pg_stat_activity_count > pg_settings_max_connections * 0.9
+        for: 2m
+        labels:
+          severity: critical
+          environment: staging
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "PostgreSQL connections are at {{ $value | humanizePercentage }} of max_connections."
+
+  - name: tgpq_redis_alerts
+    interval: 30s
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: staging
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been unreachable for 1 minute."
+
+      # Redis memory high
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "Redis memory usage is high ({{ $value | humanizePercentage }})"
+          description: "Redis is using more than 85% of its configured max memory."
+
+  - name: tgpq_broadcast_alerts
+    interval: 60s
+    rules:
+      # WebSocket latency high
+      - alert: WebSocketLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(websocket_message_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 3m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "WebSocket latency is high (p95 = {{ $value | humanizeDuration }})"
+          description: "95th percentile WebSocket message latency is above 5 seconds."
+
+      # Campaign success rate low
+      - alert: CampaignSuccessRateLow
+        expr: |
+          (
+            sum(rate(broadcast_messages_sent_total[15m]))
+            /
+            (sum(rate(broadcast_messages_sent_total[15m])) + sum(rate(broadcast_messages_failed_total[15m])))
+          ) < 0.80
+        for: 5m
+        labels:
+          severity: warning
+          environment: staging
+        annotations:
+          summary: "Campaign success rate is low ({{ $value | humanizePercentage }})"
+          description: "Broadcast campaign success rate dropped below 80%."
