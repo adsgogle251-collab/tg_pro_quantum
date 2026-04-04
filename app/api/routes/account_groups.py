@@ -211,7 +211,7 @@ async def bulk_import_accounts(
     db: AsyncSession = Depends(get_db),
     current_client: Client = Depends(get_current_client),
 ):
-    """Bulk-import accounts into a group (up to 10 000 at once)."""
+    """Bulk-import accounts into a group (up to 10,000 at once)."""
     result = await db.execute(select(AccountGroup).where(AccountGroup.id == group_id))
     group = result.scalar_one_or_none()
     if not group:

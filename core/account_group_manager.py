@@ -166,28 +166,42 @@ class AccountGroupManager:
             return
         total = len(group["accounts"])
         group["health"]["total"] = total
+        # Recalculate derived counts from per-account states
+        self._recalculate_health(group_id)
 
-    def update_account_health(self, group_id: str, account_name: str,
-                               health_score: float, status: str = "healthy"):
-        """Update health info for an account in the group."""
+    def _recalculate_health(self, group_id: str):
+        """Recalculate aggregated health stats from per-account states."""
         group = self.groups.get(group_id)
         if not group:
             return
-        accounts = group["accounts"]
-        total = len(accounts)
-        if total == 0:
-            return
-        # Simple running average update
-        old_avg = group["health"].get("avg_health_score", 100.0)
-        group["health"]["avg_health_score"] = round(
-            (old_avg * (total - 1) + health_score) / total, 2
-        )
-        if status == "banned":
-            group["health"]["banned"] = group["health"].get("banned", 0) + 1
-        elif status == "warning":
-            group["health"]["warning"] = group["health"].get("warning", 0) + 1
-        healthy = total - group["health"].get("banned", 0) - group["health"].get("warning", 0)
+        account_states = group.get("account_health_states", {})
+        total = len(group["accounts"])
+        banned = sum(1 for s in account_states.values() if s.get("status") == "banned")
+        warning = sum(1 for s in account_states.values() if s.get("status") == "warning")
+        healthy = total - banned - warning
+        scores = [s.get("health_score", 100.0) for s in account_states.values()]
+        avg_score = round(sum(scores) / len(scores), 2) if scores else 100.0
+        group["health"]["total"] = total
+        group["health"]["banned"] = banned
+        group["health"]["warning"] = warning
         group["health"]["healthy"] = max(0, healthy)
+        group["health"]["avg_health_score"] = avg_score
+
+    def update_account_health(self, group_id: str, account_name: str,
+                               health_score: float, status: str = "healthy"):
+        """Update health info for an account in the group and recalculate aggregates."""
+        group = self.groups.get(group_id)
+        if not group:
+            return
+        if account_name not in group.get("accounts", []):
+            return
+        # Store per-account state so aggregates can be recalculated accurately
+        account_states = group.setdefault("account_health_states", {})
+        account_states[account_name] = {
+            "health_score": max(0.0, min(100.0, health_score)),
+            "status": status,
+        }
+        self._recalculate_health(group_id)
         self._save()
 
     def get_group_health(self, group_id: str) -> dict:

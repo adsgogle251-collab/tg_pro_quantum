@@ -1,6 +1,6 @@
 """Account Groups Tab - Enterprise Account Pool Management"""
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
+from tkinter import ttk, messagebox, filedialog, simpledialog, scrolledtext as _scrolledtext
 from core import log, account_manager
 from core.account_group_manager import account_group_manager, FEATURE_TYPES
 from gui.styles import COLORS, FONTS
@@ -307,7 +307,7 @@ class AccountGroupsTab:
         # Health stats
         health = group.get("health", {})
         self.stat_total.config(text=str(health.get("total", 0)))
-        self.stat_healthy.config(text=str(health.get("healthy", health.get("total", 0))))
+        self.stat_healthy.config(text=str(health.get("healthy", 0)))
         self.stat_warning.config(text=str(health.get("warning", 0)))
         self.stat_banned.config(text=str(health.get("banned", 0)))
 
@@ -462,9 +462,8 @@ class AccountGroupsTab:
         tk.Label(win, text="Paste account names (one per line / comma separated):",
                  font=FONTS["normal"], fg=COLORS["text"], bg=COLORS["bg_dark"]).pack(pady=10)
 
-        from tkinter.scrolledtext import ScrolledText
-        text_widget = ScrolledText(win, height=12, bg="#16213e", fg=COLORS["text"],
-                                    font=FONTS["mono"])
+        text_widget = _scrolledtext.ScrolledText(win, height=12, bg="#16213e", fg=COLORS["text"],
+                                                  font=FONTS["mono"])
         text_widget.pack(fill="both", expand=True, padx=15, pady=5)
 
         def from_file():
