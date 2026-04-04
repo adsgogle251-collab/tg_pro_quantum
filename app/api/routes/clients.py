@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client, require_admin
 from app.database import get_db
-from app.models.database import Client
-from app.models.schemas import ClientCreate, ClientResponse, ClientUpdate, MessageResponse
+from app.models.database import Client, Campaign, CampaignStatus, TelegramAccount, AccountGroup
+from app.models.schemas import ClientCreate, ClientResponse, ClientUpdate, ClientDashboard, MessageResponse
 from app.api.dependencies import hash_password
 from app.utils.helpers import generate_api_key
 
@@ -45,6 +45,9 @@ async def create_client(
         email=body.email,
         hashed_password=hash_password(body.password),
         api_key=generate_api_key(),
+        plan_type=body.plan_type,
+        usage_limit_monthly=body.usage_limit_monthly or 10000,
+        webhook_url=body.webhook_url,
     )
     db.add(client)
     await db.flush()
@@ -132,3 +135,61 @@ async def regenerate_api_key(
     client.api_key = generate_api_key()
     await db.flush()
     return {"api_key": client.api_key}
+
+
+@router.get("/{client_id}/dashboard", response_model=ClientDashboard)
+async def get_client_dashboard(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get dashboard statistics for a client (admin or self)."""
+    if not current_client.is_admin and current_client.id != client_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Campaign stats
+    campaigns_result = await db.execute(
+        select(Campaign).where(Campaign.client_id == client_id)
+    )
+    campaigns = campaigns_result.scalars().all()
+    total_campaigns = len(campaigns)
+    active_campaigns = sum(
+        1 for c in campaigns if c.status in (CampaignStatus.running, CampaignStatus.scheduled)
+    )
+    total_sent = sum(c.sent_count for c in campaigns)
+    total_targets = sum(c.total_targets for c in campaigns)
+    delivery_rate = round(total_sent / total_targets * 100, 2) if total_targets else 0.0
+
+    # Accounts
+    accounts_result = await db.execute(
+        select(func.count(TelegramAccount.id)).where(TelegramAccount.client_id == client_id)
+    )
+    accounts_count = accounts_result.scalar() or 0
+
+    # Account groups
+    groups_result = await db.execute(
+        select(func.count(AccountGroup.id)).where(AccountGroup.client_id == client_id)
+    )
+    groups_count = groups_result.scalar() or 0
+
+    return ClientDashboard(
+        client_id=client.id,
+        client_name=client.name,
+        plan_type=client.plan_type.value,
+        status=client.status.value,
+        total_campaigns=total_campaigns,
+        active_campaigns=active_campaigns,
+        total_messages_sent=total_sent,
+        usage_limit_monthly=client.usage_limit_monthly,
+        current_usage_monthly=client.current_usage_monthly,
+        usage_pct=round(client.current_usage_monthly / client.usage_limit_monthly * 100, 2)
+        if client.usage_limit_monthly else 0.0,
+        accounts_count=accounts_count,
+        account_groups_count=groups_count,
+        overall_delivery_rate=delivery_rate,
+    )

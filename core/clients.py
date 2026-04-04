@@ -61,23 +61,33 @@ class ClientManager:
         except Exception as e:
             log_error(f"Failed to save usage: {e}")
     
-    def create_client(self, name: str, email: str, company: str = "", 
-                      phone: str = "", tier: str = "basic") -> str:
+    def create_client(self, name: str, email: str, company: str = "",
+                      phone: str = "", notes: str = "", tier: str = "basic",
+                      plan_type: str = "starter", usage_limit_monthly: int = 10000,
+                      account_groups: list = None, webhook_url: str = "") -> str:
         """Create new client"""
-        import uuid
+        import uuid, secrets, string
         client_id = f"CLIENT_{uuid.uuid4().hex[:8].upper()}"
-        
+        alphabet = string.ascii_letters + string.digits
+        api_key = "".join(secrets.choice(alphabet) for _ in range(40))
+
         self.clients[client_id] = {
             "id": client_id,
             "name": name,
             "email": email,
             "company": company,
             "phone": phone,
+            "notes": notes,
             "tier": tier,
+            "plan_type": plan_type,
+            "api_key": api_key,
             "status": "active",
+            "usage_limit_monthly": usage_limit_monthly,
+            "current_usage_monthly": 0,
+            "webhook_url": webhook_url,
             "created_at": datetime.now().isoformat(),
             "last_active": None,
-            "account_groups": [],
+            "account_groups": list(account_groups) if account_groups else [],
             "campaigns": [],
             "settings": {
                 "timezone": "Asia/Jakarta",
@@ -86,12 +96,12 @@ class ClientManager:
                 "report_frequency": "weekly"
             },
             "limits": {
-                "max_accounts": 10 if tier == "basic" else 50 if tier == "pro" else 999,
-                "max_broadcasts_per_day": 100 if tier == "basic" else 500 if tier == "pro" else 9999,
-                "max_messages_per_day": 1000 if tier == "basic" else 10000 if tier == "pro" else 999999
+                "max_accounts": 10 if plan_type == "starter" else 50 if plan_type == "pro" else 999,
+                "max_broadcasts_per_day": 100 if plan_type == "starter" else 500 if plan_type == "pro" else 9999,
+                "max_messages_per_day": 1000 if plan_type == "starter" else 10000 if plan_type == "pro" else 999999
             }
         }
-        
+
         self.usage[client_id] = {
             "accounts_used": 0,
             "broadcasts_today": 0,
@@ -101,7 +111,7 @@ class ClientManager:
             "total_failed": 0,
             "last_broadcast": None
         }
-        
+
         self._save_clients()
         self._save_usage()
         log(f"Client created: {name} ({client_id})", "success")
@@ -123,15 +133,37 @@ class ClientManager:
         return list(self.clients.values())
     
     def update_client(self, client_id: str, **kwargs) -> bool:
-        """Update client settings"""
+        """Update client settings.
+
+        Allowed fields: name, email, company, phone, notes, tier, plan_type, status,
+        usage_limit_monthly, current_usage_monthly, webhook_url, account_groups,
+        campaigns, settings, billing_info, last_active.
+        """
         if client_id not in self.clients:
             return False
+        allowed = {
+            "name", "email", "company", "phone", "notes", "tier", "plan_type",
+            "status", "usage_limit_monthly", "current_usage_monthly", "webhook_url",
+            "account_groups", "campaigns", "settings", "billing_info", "last_active",
+            "limits",
+        }
         for key, value in kwargs.items():
-            if key in self.clients[client_id]:
+            if key in allowed:
                 self.clients[client_id][key] = value
         self._save_clients()
         log(f"Client updated: {client_id}", "info")
         return True
+
+    def regenerate_api_key(self, client_id: str) -> str:
+        """Generate a new API key for a client and return it."""
+        import secrets, string
+        alphabet = string.ascii_letters + string.digits
+        new_key = "".join(secrets.choice(alphabet) for _ in range(40))
+        if client_id in self.clients:
+            self.clients[client_id]["api_key"] = new_key
+            self._save_clients()
+            log(f"API key regenerated for client: {client_id}", "info")
+        return new_key
     
     def delete_client(self, client_id: str) -> bool:
         """Delete client"""

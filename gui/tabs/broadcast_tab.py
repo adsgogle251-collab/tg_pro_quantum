@@ -155,6 +155,12 @@ class BroadcastTab:
         
         self.fail_lbl = tk.Label(stats_fr, text="❌ Failed: 0", bg="#0f3460", fg="#ff0000", font=("Segoe UI", 14, "bold"))
         self.fail_lbl.pack(side="left", padx=20)
+
+        self.rate_lbl = tk.Label(stats_fr, text="📊 Rate: —", bg="#0f3460", fg="#00d9ff", font=("Segoe UI", 14, "bold"))
+        self.rate_lbl.pack(side="left", padx=20)
+
+        self.active_acc_lbl = tk.Label(stats_fr, text="📱 Active: —", bg="#0f3460", fg="#ffaa00", font=("Segoe UI", 11))
+        self.active_acc_lbl.pack(side="left", padx=20)
         
         # Progress bar
         prog_fr = tk.Frame(bottom_frame, bg="#0f3460")
@@ -283,7 +289,8 @@ class BroadcastTab:
     def _add_entry(self, account, group, status):
         ts = time.strftime("%H:%M:%S")
         icon = "✅" if status == "success" else "❌"
-        self.progress_tree.insert("", "end", values=(ts, account[:15], group[:40], icon))
+        # Insert newest first
+        self.progress_tree.insert("", 0, values=(ts, account[:15], group[:40], icon))
         if status == "success":
             c = int(self.sent_lbl.cget("text").split(": ")[1])
             self.sent_lbl.config(text=f"✅ Sent: {c+1}")
@@ -303,6 +310,16 @@ class BroadcastTab:
         
         self.sent_lbl.config(text=f"✅ Sent: {sent}")
         self.fail_lbl.config(text=f"❌ Failed: {failed}")
+
+        # Live success rate
+        total_attempts = sent + failed
+        rate = round(sent / total_attempts * 100, 1) if total_attempts > 0 else 0.0
+        rate_color = "#00ff00" if rate >= 90 else "#ffaa00" if rate >= 70 else "#ff4444"
+        self.rate_lbl.config(text=f"📊 Rate: {rate}%", fg=rate_color)
+
+        # Active account display
+        if cur_acc:
+            self.active_acc_lbl.config(text=f"📱 Active: {cur_acc[:20]}")
         
         if total > 0:
             self.progress['value'] = min(100, prog)
@@ -312,10 +329,12 @@ class BroadcastTab:
             self._add_entry(cur_acc, cur_grp, "failed" if err else "success")
         
         if done:
+            self.running = False
             self.start_btn.config(state="normal")
             self.pause_btn.config(state="disabled", text="⏸️ PAUSE")
             self.stop_btn.config(state="disabled")
-            messagebox.showinfo("Complete", f"Sent: {sent}\nFailed: {failed}")
+            self.active_acc_lbl.config(text="📱 Active: —")
+            messagebox.showinfo("Complete", f"Sent: {sent}\nFailed: {failed}\nSuccess Rate: {rate}%")
     
     def _start_broadcast(self):
         msg = self.message_text.get(1.0, "end-1c").strip()
@@ -350,6 +369,15 @@ class BroadcastTab:
         self.pause_btn.config(state="normal")
         self.stop_btn.config(state="normal")
         
+        # Reset stats display
+        self.sent_lbl.config(text="✅ Sent: 0")
+        self.fail_lbl.config(text="❌ Failed: 0")
+        self.rate_lbl.config(text="📊 Rate: —", fg="#00d9ff")
+        self.progress['value'] = 0
+        self.prog_lbl.config(text="0%")
+        for item in self.progress_tree.get_children():
+            self.progress_tree.delete(item)
+        
         log(f"📢 BROADCAST STARTED: {len(accs)} accounts, {len(grps)} groups", "success")
         
         def cb(**kw):
@@ -376,6 +404,18 @@ class BroadcastTab:
                 loop.close()
         
         threading.Thread(target=run, daemon=True).start()
+        # Start auto-refresh monitor (updates live stats every second)
+        self._auto_refresh_monitor()
+
+    def _auto_refresh_monitor(self):
+        """Auto-refresh live stats every second while broadcast is running."""
+        if not self.running:
+            return
+        # Scroll progress tree to top (newest entry)
+        children = self.progress_tree.get_children()
+        if children:
+            self.progress_tree.see(children[0])
+        self.frame.after(1000, self._auto_refresh_monitor)
     
     def _pause_broadcast(self):
         if self.running and not self.paused:
