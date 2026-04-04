@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.database import (
     AccountStatus, BroadcastStatus, CampaignMode, CampaignStatus, ClientStatus, OTPStatus,
+    AccountFeature, AccountGroupLink,
 )
 
 
@@ -279,6 +280,23 @@ class ClientStats(BaseModel):
     overall_delivery_rate: float
     accounts_count: int
     groups_count: int
+
+
+# ── Account Feature / Group Assignment ───────────────────────────────────────
+
+class AccountFeatureResponse(OrmBase):
+    id: int
+    account_id: int
+    feature: str
+    assigned_at: datetime
+    status: str
+
+
+class AccountGroupLinkResponse(OrmBase):
+    id: int
+    account_id: int
+    group_id: int
+    assigned_at: datetime
 
 
 # ── Generic ───────────────────────────────────────────────────────────────────

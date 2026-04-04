@@ -282,28 +282,27 @@ class AccountManager:
         }
 
     # ═══════════════════════════════════════════════════════
-    # FEATURE ASSIGNMENT METHODS
+    # FEATURE ASSIGNMENT - CRITICAL FOR INTEGRATION
     # ═══════════════════════════════════════════════════════
-    
+
     def assign_feature(self, account_name: str, feature: str) -> bool:
-        """Assign feature to account"""
-        if account_name not in self.accounts:
-            log(f"Account {account_name} not found", "warning")
+        """Assign a feature to an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            log(f"Account not found: {account_name}", "warning")
             return False
-        acc = self.accounts[account_name]
-        features = acc.get("features", [])
+        features = acc.setdefault("features", [])
         if feature not in features:
             features.append(feature)
-            acc["features"] = features
             self._save_accounts()
             log(f"Feature '{feature}' assigned to {account_name}", "success")
         return True
-    
+
     def remove_feature(self, account_name: str, feature: str) -> bool:
-        """Remove feature from account"""
-        if account_name not in self.accounts:
+        """Remove a feature from an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
             return False
-        acc = self.accounts[account_name]
         features = acc.get("features", [])
         if feature in features:
             features.remove(feature)
@@ -312,44 +311,71 @@ class AccountManager:
             log(f"Feature '{feature}' removed from {account_name}", "info")
             return True
         return False
-    
-    def get_account_features(self, account_name: str) -> List[str]:
-        """Get all features assigned to account"""
-        acc = self.accounts.get(account_name, {})
-        return acc.get("features", [])
-    
+
     def get_accounts_by_feature(self, feature: str) -> List[dict]:
-        """Get all accounts assigned to a specific feature"""
+        """Return all accounts assigned to a given feature."""
         result = []
-        for name, acc in self.accounts.items():
+        for acc in self.get_all():
             if feature in acc.get("features", []):
                 result.append(acc)
         return result
-    
-    def get_featured_accounts(self) -> Dict:
-        """Get {feature: [account_names]} mapping"""
-        result = {f: [] for f in self.SUPPORTED_FEATURES}
-        for name, acc in self.accounts.items():
+
+    def get_featured_accounts(self) -> Dict[str, List[dict]]:
+        """Return a dict mapping feature name → list of assigned accounts."""
+        mapping: Dict[str, List[dict]] = {}
+        for acc in self.get_all():
             for feature in acc.get("features", []):
-                if feature in result:
-                    result[feature].append(name)
+                mapping.setdefault(feature, []).append(acc)
+        return mapping
+
+    def get_all_assigned(self) -> Dict[str, list]:
+        """Return all feature and group assignments for every account."""
+        result = {}
+        for acc in self.get_all():
+            name = acc.get("name", "")
+            result[name] = {
+                "features": acc.get("features", []),
+                "groups": acc.get("assigned_groups", []),
+            }
         return result
-    
-    def get_all_assignments(self) -> Dict:
-        """Get all feature & group assignments"""
-        return {
-            "features": self.get_featured_accounts(),
-            "groups": self.get_all_groups()
-        }
-    
-    def unassign_all_features(self, account_name: str) -> bool:
-        """Remove all feature assignments from account"""
-        if account_name not in self.accounts:
+
+    # ═══════════════════════════════════════════════════════
+    # ACCOUNT ↔ GROUP ASSIGNMENT (feature-level linking)
+    # ═══════════════════════════════════════════════════════
+
+    def assign_group(self, account_name: str, group_id: str) -> bool:
+        """Assign a group id to an account's personal group list."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            log(f"Account not found: {account_name}", "warning")
             return False
-        self.accounts[account_name]["features"] = []
-        self._save_accounts()
-        log(f"All features removed from {account_name}", "info")
+        assigned = acc.setdefault("assigned_groups", [])
+        if group_id not in assigned:
+            assigned.append(group_id)
+            self._save_accounts()
+            log(f"Group '{group_id}' assigned to account {account_name}", "success")
         return True
+
+    def remove_assigned_group(self, account_name: str, group_id: str) -> bool:
+        """Remove a group from an account's personal group list."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return False
+        assigned = acc.get("assigned_groups", [])
+        if group_id in assigned:
+            assigned.remove(group_id)
+            acc["assigned_groups"] = assigned
+            self._save_accounts()
+            log(f"Group '{group_id}' removed from account {account_name}", "info")
+            return True
+        return False
+
+    def get_account_groups(self, account_name: str) -> List[str]:
+        """Return the list of group ids assigned to an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return []
+        return acc.get("assigned_groups", [])
 
 
 # Global instance

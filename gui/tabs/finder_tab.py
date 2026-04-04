@@ -225,49 +225,47 @@ class FinderTab:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-    
+
+    def _on_tab_selected(self):
+        """Called by main_window when this tab is selected."""
+        self._load_account_lists()
+
     def _load_account_lists(self):
         self.available_accounts.delete(0, "end")
         self.assigned_accounts.delete(0, "end")
-        
+
+        assigned_names = {a['name'] for a in account_manager.get_accounts_by_feature("finder")}
+
         for acc in account_manager.get_all():
             display = f"{acc['name']} (L{acc.get('level', 1)})"
-            is_assigned = False
-            try:
-                assignments = account_router.get_assignments(Feature.FINDER)
-                if any(a.account_id == acc['name'] for a in assignments):
-                    is_assigned = True
-            except:
-                pass
-            
-            if is_assigned:
+            if acc['name'] in assigned_names:
                 self.assigned_accounts.insert("end", acc['name'])
             else:
                 self.available_accounts.insert("end", display)
-    
+
     def _assign_finder_accounts(self):
         selection = self.available_accounts.curselection()
         if not selection:
             messagebox.showwarning("Warning", "Select accounts first!")
             return
-        
+
         for i in selection:
             display = self.available_accounts.get(i)
             name = display.split(" (")[0]
-            account_router.assign(name, Feature.FINDER)
-        
+            account_manager.assign_feature(name, "finder")
+
         self._load_account_lists()
         messagebox.showinfo("Success", "Accounts assigned to Finder")
-    
+
     def _remove_finder_accounts(self):
         selection = self.assigned_accounts.curselection()
         if not selection:
             return
-        
+
         for i in reversed(selection):
             name = self.assigned_accounts.get(i)
-            account_router.unassign(name)
-        
+            account_manager.remove_feature(name, "finder")
+
         self._load_account_lists()
     
     def _generate_keywords(self):
