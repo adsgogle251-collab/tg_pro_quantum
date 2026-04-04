@@ -161,56 +161,54 @@ class AICSTab:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-    
+
+    def _on_tab_selected(self):
+        """Called by main_window when this tab is selected."""
+        self._load_assigned_accounts()
+
     def _load_assigned_accounts(self):
         if not hasattr(self, 'available_accounts'):
             return
-        
+
         self.available_accounts.delete(0, "end")
         self.assigned_accounts.delete(0, "end")
-        
+
+        assigned_names = {a['name'] for a in account_manager.get_accounts_by_feature("cs")}
+
         for acc in account_manager.get_all():
             display = f"{acc['name']} (L{acc.get('level', 1)})"
-            is_assigned = False
-            try:
-                assignments = account_router.get_assignments(Feature.CS)
-                if any(a.account_id == acc['name'] for a in assignments):
-                    is_assigned = True
-            except:
-                pass
-            
-            if is_assigned:
+            if acc['name'] in assigned_names:
                 self.assigned_accounts.insert("end", acc['name'])
             else:
                 self.available_accounts.insert("end", display)
-        
+
         count = self.assigned_accounts.size()
         if self.cs_account_count:
             self.cs_account_count.config(text=f"{count} accounts assigned to CS")
-    
+
     def _assign_cs_accounts(self):
         selection = self.available_accounts.curselection()
         if not selection:
             messagebox.showwarning("Warning", "Select accounts first!")
             return
-        
+
         for i in selection:
             display = self.available_accounts.get(i)
             name = display.split(" (")[0]
-            account_router.assign(name, Feature.CS)
-        
+            account_manager.assign_feature(name, "cs")
+
         self._load_assigned_accounts()
         messagebox.showinfo("Success", "Accounts assigned to CS")
-    
+
     def _remove_cs_accounts(self):
         selection = self.assigned_accounts.curselection()
         if not selection:
             return
-        
+
         for i in reversed(selection):
             name = self.assigned_accounts.get(i)
-            account_router.unassign(name)
-        
+            account_manager.remove_feature(name, "cs")
+
         self._load_assigned_accounts()
     
     def _send_reply(self):

@@ -264,12 +264,12 @@ class DashboardTab:
             # Get groups
             groups = load_groups()
             
-            # Get feature assignments
+            # Get feature assignments using account_manager (single source of truth)
             feature_counts = {"broadcast": 0, "finder": 0, "scrape": 0, "join": 0, "cs": 0}
             try:
-                assignments = account_router.get_assignments()
-                for assignment in assignments:
-                    feature_counts[assignment.feature.value] = feature_counts.get(assignment.feature.value, 0) + 1
+                featured = account_manager.get_featured_accounts()
+                for feat, accs in featured.items():
+                    feature_counts[feat] = len(accs)
             except:
                 pass
             

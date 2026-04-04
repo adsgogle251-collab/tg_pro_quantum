@@ -279,6 +279,102 @@ class AccountManager:
                       for name, accounts in groups.items()}
         }
 
+    # ═══════════════════════════════════════════════════════
+    # FEATURE ASSIGNMENT - CRITICAL FOR INTEGRATION
+    # ═══════════════════════════════════════════════════════
+
+    def assign_feature(self, account_name: str, feature: str) -> bool:
+        """Assign a feature to an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            log(f"Account not found: {account_name}", "warning")
+            return False
+        features = acc.setdefault("features", [])
+        if feature not in features:
+            features.append(feature)
+            self._save_accounts()
+            log(f"Feature '{feature}' assigned to {account_name}", "success")
+        return True
+
+    def remove_feature(self, account_name: str, feature: str) -> bool:
+        """Remove a feature from an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return False
+        features = acc.get("features", [])
+        if feature in features:
+            features.remove(feature)
+            acc["features"] = features
+            self._save_accounts()
+            log(f"Feature '{feature}' removed from {account_name}", "info")
+            return True
+        return False
+
+    def get_accounts_by_feature(self, feature: str) -> List[dict]:
+        """Return all accounts assigned to a given feature."""
+        result = []
+        for acc in self.get_all():
+            if feature in acc.get("features", []):
+                result.append(acc)
+        return result
+
+    def get_featured_accounts(self) -> Dict[str, List[dict]]:
+        """Return a dict mapping feature name → list of assigned accounts."""
+        mapping: Dict[str, List[dict]] = {}
+        for acc in self.get_all():
+            for feature in acc.get("features", []):
+                mapping.setdefault(feature, []).append(acc)
+        return mapping
+
+    def get_all_assigned(self) -> Dict[str, list]:
+        """Return all feature and group assignments for every account."""
+        result = {}
+        for acc in self.get_all():
+            name = acc.get("name", "")
+            result[name] = {
+                "features": acc.get("features", []),
+                "groups": acc.get("assigned_groups", []),
+            }
+        return result
+
+    # ═══════════════════════════════════════════════════════
+    # ACCOUNT ↔ GROUP ASSIGNMENT (feature-level linking)
+    # ═══════════════════════════════════════════════════════
+
+    def assign_group(self, account_name: str, group_id: str) -> bool:
+        """Assign a group id to an account's personal group list."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            log(f"Account not found: {account_name}", "warning")
+            return False
+        assigned = acc.setdefault("assigned_groups", [])
+        if group_id not in assigned:
+            assigned.append(group_id)
+            self._save_accounts()
+            log(f"Group '{group_id}' assigned to account {account_name}", "success")
+        return True
+
+    def remove_assigned_group(self, account_name: str, group_id: str) -> bool:
+        """Remove a group from an account's personal group list."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return False
+        assigned = acc.get("assigned_groups", [])
+        if group_id in assigned:
+            assigned.remove(group_id)
+            acc["assigned_groups"] = assigned
+            self._save_accounts()
+            log(f"Group '{group_id}' removed from account {account_name}", "info")
+            return True
+        return False
+
+    def get_account_groups(self, account_name: str) -> List[str]:
+        """Return the list of group ids assigned to an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return []
+        return acc.get("assigned_groups", [])
+
 
 # Global instance
 account_manager = AccountManager()
