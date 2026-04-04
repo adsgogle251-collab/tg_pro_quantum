@@ -112,18 +112,19 @@ async def get_campaign_statistics(
         raise HTTPException(status_code=404, detail="Campaign not found")
     _require_owns(campaign, current_client)
 
-    total = campaign.total_targets or 1
+    total = campaign.total_targets if campaign.total_targets else 1
     delivery_rate = campaign.sent_count / total * 100 if total else 0.0
     progress_pct = (campaign.sent_count + campaign.failed_count) / total * 100 if total else 0.0
 
     return CampaignStats(
         campaign_id=campaign.id,
-        total_targets=campaign.total_targets,
-        sent_count=campaign.sent_count,
-        failed_count=campaign.failed_count,
-        retry_count=campaign.retry_count,
+        campaign_name=campaign.name,
+        total_targets=campaign.total_targets or 0,
+        sent_count=campaign.sent_count or 0,
+        failed_count=campaign.failed_count or 0,
         delivery_rate=round(delivery_rate, 2),
-        progress_pct=round(progress_pct, 2),
+        created_at=campaign.created_at,
+        completed_at=campaign.completed_at,
     )
 
 
@@ -252,9 +253,15 @@ async def broadcast_overview(
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
     for c in campaigns:
-        if c.created_at and c.created_at >= cutoff:
-            total_sent_24h += c.sent_count
-            total_targets_24h += c.total_targets
+        if c.created_at:
+            # Normalise to timezone-aware for comparison (SQLite stores naive datetimes)
+            ts = c.created_at
+            if ts.tzinfo is None:
+                from datetime import timezone as _tz
+                ts = ts.replace(tzinfo=_tz.utc)
+            if ts >= cutoff:
+                total_sent_24h += c.sent_count or 0
+                total_targets_24h += c.total_targets or 0
 
     overall_success = (
         round(total_sent_24h / total_targets_24h * 100, 2)
@@ -281,7 +288,11 @@ async def broadcast_overview(
         success_rate = camp.sent_count / total * 100 if total else 0.0
         elapsed: Optional[float] = None
         if camp.created_at:
-            elapsed = (now - camp.created_at).total_seconds() / 60
+            ts = camp.created_at
+            if ts.tzinfo is None:
+                from datetime import timezone as _tz
+                ts = ts.replace(tzinfo=_tz.utc)
+            elapsed = (now - ts).total_seconds() / 60
 
         cards.append(
             MultiClientCampaignCard(
