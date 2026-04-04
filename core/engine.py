@@ -170,10 +170,17 @@ class BroadcastEngine:
         return True
     
     async def _send_message(self, account_name: str, group: str, message: str) -> bool:
-        """Send message (SIMULATED)"""
+        """Send message via real Telethon client."""
         try:
-            await asyncio.sleep(0.5)
-            return True
+            from . import account_manager as _am
+            acc = _am.account_manager.get(account_name)
+            phone = acc.get("phone", "") if acc else account_name
+
+            from .telegram_client import send_message
+            success, error = await send_message(phone, group, message)
+            if not success and error:
+                log(f"send_message error ({account_name} → {group}): {error}", "warning")
+            return success
         except Exception as e:
             log_error(f"Send message error: {e}")
             return False
@@ -264,10 +271,17 @@ class JoinEngine:
         return True
     
     async def _join_group(self, account_name: str, group: str) -> bool:
-        """Join group (SIMULATED)"""
+        """Join group via real Telethon client."""
         try:
-            await asyncio.sleep(0.5)
-            return True
+            from . import account_manager as _am
+            acc = _am.account_manager.get(account_name)
+            phone = acc.get("phone", "") if acc else account_name
+
+            from .telegram_client import join_group
+            success, error = await join_group(phone, group)
+            if not success and error:
+                log(f"join_group error ({account_name} → {group}): {error}", "warning")
+            return success
         except Exception as e:
             log_error(f"Join group error: {e}")
             return False
@@ -285,22 +299,15 @@ class ScrapeEngine:
         """Initialize Telegram client"""
         log(f"Scrape engine initialized with API ID: {api_id}", "info")
     
-    async def scrape_group(self, account_name: str, group: str) -> list:
-        """Scrape members from group (SIMULATED)"""
+    async def scrape_group(self, account_name: str, group: str, limit: int = 200) -> list:
+        """Scrape members from group via real Telethon client."""
         try:
-            # SIMULATED - replace with actual API
-            await asyncio.sleep(0.5)
-            
-            # Return simulated members
-            members = []
-            for i in range(random.randint(10, 50)):
-                members.append({
-                    'id': 100000000 + i,
-                    'username': f'user{i}',
-                    'first_name': f'User {i}',
-                    'phone': f'+628{i:09d}' if i % 3 == 0 else ''
-                })
-            
+            from . import account_manager as _am
+            acc = _am.account_manager.get(account_name)
+            phone = acc.get("phone", "") if acc else account_name
+
+            from .telegram_client import scrape_members
+            members = await scrape_members(phone, group, limit=limit)
             log(f"📥 Scraped {len(members)} members from {group}", "success")
             return members
         except Exception as e:

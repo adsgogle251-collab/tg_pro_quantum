@@ -112,6 +112,29 @@ class AccountResponse(OrmBase):
     created_at: datetime
 
 
+# ── Telegram OTP Login (account onboarding) ───────────────────────────────────
+
+class TelegramLoginRequest(BaseModel):
+    """Step 1: send OTP code to the phone number via Telegram."""
+    phone: str = Field(..., pattern=r"^\+?[1-9]\d{6,14}$")
+    api_id: int = Field(..., gt=0)
+    api_hash: str = Field(..., min_length=32, max_length=64)
+
+
+class TelegramLoginResponse(BaseModel):
+    phone_code_hash: str
+    type: str
+    timeout: int
+
+
+class TelegramVerifyRequest(BaseModel):
+    """Step 2: verify OTP and finalise login for an existing account record."""
+    account_id: int
+    code: str = Field(..., min_length=1, max_length=10)
+    phone_code_hash: str
+    password: str = Field("", description="2FA password if enabled")
+
+
 # ── Group ─────────────────────────────────────────────────────────────────────
 
 class GroupCreate(BaseModel):

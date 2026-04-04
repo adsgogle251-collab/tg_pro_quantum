@@ -1,9 +1,14 @@
 """Account Tab - Complete with Session Validation (Phase 1000)"""
+import asyncio
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from core import log, account_manager, import_manager, statistics
 from core.account_router import account_router, Feature
 from gui.styles import COLORS, FONTS
+
+# Timeout (seconds) waiting for the user to enter an OTP during bulk import
+_BULK_OTP_TIMEOUT_SECONDS = 180
 
 class AccountTab:
     title = "📱 Accounts"
@@ -448,51 +453,344 @@ class AccountTab:
     # ACCOUNT OPERATIONS
     # ═══════════════════════════════════════════════════════
     
+    # ═══════════════════════════════════════════════════════
+    # ADD ACCOUNT – Real Telegram OTP Login
+    # ═══════════════════════════════════════════════════════
+
     def _add_account(self):
+        """Open dialog to add a single account with real Telegram OTP."""
         dialog = tk.Toplevel(self.frame)
-        dialog.title("➕ Add Account")
-        dialog.geometry("400x300")
+        dialog.title("➕ Add Account (Real OTP Login)")
+        dialog.geometry("420x380")
         dialog.configure(bg="#1a1a2e")
-        
+        dialog.transient(self.frame)
+        dialog.grab_set()
+
         tk.Label(dialog, text="➕ Add Account", font=("Segoe UI", 16, "bold"),
                  fg="#00d9ff", bg="#1a1a2e").pack(pady=15)
-        
+
         form_frame = tk.Frame(dialog, bg="#0f3460")
         form_frame.pack(fill="both", expand=True, padx=20, pady=10)
-        
+
         tk.Label(form_frame, text="Name:", fg="#ffffff", bg="#0f3460").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         name_entry = tk.Entry(form_frame, width=30, bg="#1a1a2e", fg="#ffffff")
         name_entry.grid(row=0, column=1, padx=10, pady=8)
-        
+
         tk.Label(form_frame, text="Phone:", fg="#ffffff", bg="#0f3460").grid(row=1, column=0, padx=10, pady=8, sticky="w")
         phone_entry = tk.Entry(form_frame, width=30, bg="#1a1a2e", fg="#ffffff")
         phone_entry.insert(0, "+62")
         phone_entry.grid(row=1, column=1, padx=10, pady=8)
-        
+
         tk.Label(form_frame, text="Level:", fg="#ffffff", bg="#0f3460").grid(row=2, column=0, padx=10, pady=8, sticky="w")
         level_var = tk.StringVar(value="1")
-        level_combo = ttk.Combobox(form_frame, textvariable=level_var, values=["1", "2", "3", "4"], width=28)
+        level_combo = ttk.Combobox(form_frame, textvariable=level_var,
+                                    values=["1", "2", "3", "4"], width=28)
         level_combo.grid(row=2, column=1, padx=10, pady=8)
-        
-        def save():
-            name = name_entry.get().strip()
+
+        status_var = tk.StringVar(value="")
+        status_label = tk.Label(dialog, textvariable=status_var, fg="#ffaa00",
+                                 bg="#1a1a2e", font=("Segoe UI", 10), wraplength=380)
+        status_label.pack(pady=5)
+
+        btn_frame = tk.Frame(dialog, bg="#1a1a2e")
+        btn_frame.pack(pady=10)
+
+        send_btn = tk.Button(btn_frame, text="📱 Send OTP", command=lambda: _send_otp(),
+                              bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold"),
+                              padx=20, pady=8)
+        send_btn.pack(side="left", padx=5)
+
+        # Stored state between OTP steps
+        _state = {"phone_code_hash": None}
+
+        def _set_status(msg, color="#ffaa00"):
+            status_var.set(msg)
+            status_label.config(fg=color)
+            dialog.update_idletasks()
+
+        def _send_otp():
             phone = phone_entry.get().strip()
-            level = int(level_var.get())
-            
-            if not name or not phone:
-                messagebox.showerror("Error", "Name and phone required!")
+            if not phone or phone == "+62":
+                messagebox.showerror("Error", "Enter a valid phone number!", parent=dialog)
                 return
-            
-            if account_manager.add(name, phone, level):
-                messagebox.showinfo("Success", "Account added!")
+
+            send_btn.config(state="disabled", text="⏳ Sending…")
+            _set_status("Connecting to Telegram…")
+
+            def _do():
+                try:
+                    from core.telegram_client import request_login_code, run_async
+                    result = run_async(request_login_code(phone))
+
+                    if result.get("already_authorized"):
+                        # Already logged in – just register account
+                        dialog.after(0, lambda: _finish_already_authorized(phone))
+                    else:
+                        _state["phone_code_hash"] = result.get("phone_code_hash", "")
+                        dialog.after(0, lambda: _show_otp_step(phone))
+                except Exception as exc:
+                    dialog.after(0, lambda: _on_error(str(exc)))
+
+            threading.Thread(target=_do, daemon=True).start()
+
+        def _on_error(msg):
+            send_btn.config(state="normal", text="📱 Send OTP")
+            _set_status(f"❌ {msg}", "#ff4444")
+            messagebox.showerror("Error", msg, parent=dialog)
+
+        def _finish_already_authorized(phone):
+            name = name_entry.get().strip() or phone
+            level = int(level_var.get())
+            account_manager.add(name, phone, level)
+            _set_status(f"✅ Account {name} already authorized and added!", "#00ff00")
+            self._load_accounts()
+            dialog.after(1500, dialog.destroy)
+
+        def _show_otp_step(phone):
+            send_btn.config(state="normal", text="🔄 Resend OTP")
+            _set_status(f"✅ OTP sent to {phone}! Enter it below.", "#00ff00")
+
+            otp_win = tk.Toplevel(dialog)
+            otp_win.title("🔑 Enter OTP")
+            otp_win.geometry("360x320")
+            otp_win.configure(bg="#1a1a2e")
+            otp_win.transient(dialog)
+            otp_win.grab_set()
+
+            tk.Label(otp_win, text="🔑 Enter OTP Code", font=("Segoe UI", 14, "bold"),
+                     fg="#00d9ff", bg="#1a1a2e").pack(pady=12)
+            tk.Label(otp_win, text=f"Code sent to: {phone}",
+                     fg="#ffffff", bg="#1a1a2e").pack()
+            tk.Label(otp_win, text="Check your Telegram app for the code.",
+                     fg="#aaaaaa", bg="#1a1a2e", font=("Segoe UI", 9)).pack(pady=5)
+
+            otp_frame = tk.Frame(otp_win, bg="#0f3460")
+            otp_frame.pack(fill="x", padx=20, pady=10)
+
+            tk.Label(otp_frame, text="OTP Code:", fg="#ffffff", bg="#0f3460").grid(row=0, column=0, padx=10, pady=8)
+            otp_entry = tk.Entry(otp_frame, width=20, bg="#1a1a2e", fg="#ffffff",
+                                  font=("Segoe UI", 14), justify="center")
+            otp_entry.grid(row=0, column=1, padx=10, pady=8)
+            otp_entry.focus_set()
+
+            tk.Label(otp_frame, text="2FA Password\n(if enabled):", fg="#ffffff", bg="#0f3460").grid(row=1, column=0, padx=10, pady=8)
+            pw_entry = tk.Entry(otp_frame, width=20, bg="#1a1a2e", fg="#ffffff", show="●")
+            pw_entry.grid(row=1, column=1, padx=10, pady=8)
+
+            otp_status_var = tk.StringVar(value="")
+            otp_status_lbl = tk.Label(otp_win, textvariable=otp_status_var,
+                                       fg="#ffaa00", bg="#1a1a2e", wraplength=320)
+            otp_status_lbl.pack(pady=5)
+
+            verify_btn = tk.Button(otp_win, text="✅ Verify OTP", command=lambda: _verify(),
+                                    bg="#00ff00", fg="#000000", font=("Segoe UI", 11, "bold"),
+                                    padx=20, pady=8)
+            verify_btn.pack(pady=8)
+            otp_entry.bind("<Return>", lambda e: _verify())
+
+            def _verify():
+                code = otp_entry.get().strip()
+                password = pw_entry.get().strip()
+                if not code:
+                    messagebox.showerror("Error", "Enter the OTP code!", parent=otp_win)
+                    return
+
+                verify_btn.config(state="disabled", text="⏳ Verifying…")
+                otp_status_var.set("Verifying OTP…")
+
+                def _do_verify():
+                    try:
+                        from core.telegram_client import sign_in_with_code, run_async
+                        result = run_async(sign_in_with_code(
+                            phone, code, _state["phone_code_hash"], password
+                        ))
+
+                        name = name_entry.get().strip() or result["user"]["first_name"] or phone
+                        level = int(level_var.get())
+
+                        account_manager.add(name, phone, level, status="active")
+                        log(f"✅ Account {name} ({phone}) added with real session", "success")
+
+                        otp_win.after(0, lambda: _on_verify_success(name, otp_win))
+                    except Exception as exc:
+                        otp_win.after(0, lambda: _on_verify_error(str(exc), verify_btn, otp_status_var))
+
+                threading.Thread(target=_do_verify, daemon=True).start()
+
+            def _on_verify_success(name, win):
+                otp_status_var.set(f"✅ Login successful! Account '{name}' added.")
+                otp_status_lbl.config(fg="#00ff00")
                 self._load_accounts()
-                dialog.destroy()
-            else:
-                messagebox.showerror("Error", "Account already exists!")
-        
-        tk.Button(dialog, text="✅ Add", command=save,
-                  bg="#00ff00", fg="#000000", font=("Segoe UI", 12, "bold"),
-                  padx=30, pady=10).pack(pady=20)
+                win.after(1500, win.destroy)
+                dialog.after(1600, dialog.destroy)
+
+            def _on_verify_error(msg, btn, status_sv):
+                btn.config(state="normal", text="✅ Verify OTP")
+                status_sv.set(f"❌ {msg}")
+                otp_status_lbl.config(fg="#ff4444")
+                messagebox.showerror("Error", msg, parent=otp_win)
+
+    # ═══════════════════════════════════════════════════════
+    # BULK IMPORT – CSV with real OTP login per account
+    # ═══════════════════════════════════════════════════════
+
+    def _bulk_login_csv(self):
+        """Bulk-add accounts from CSV, performing real OTP for each."""
+        filepath = filedialog.askopenfilename(
+            title="Select CSV (phone,name,level)",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if not filepath:
+            return
+
+        import csv
+        rows = []
+        try:
+            with open(filepath, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    phone = row.get("phone", "").strip()
+                    name = row.get("name", "").strip() or phone
+                    level = int(row.get("level", "1").strip() or 1)
+                    if phone:
+                        rows.append((phone, name, level))
+        except Exception as exc:
+            messagebox.showerror("CSV Error", str(exc))
+            return
+
+        if not rows:
+            messagebox.showwarning("Warning", "No valid phone numbers found in CSV")
+            return
+
+        # Progress window
+        prog_win = tk.Toplevel(self.frame)
+        prog_win.title("📥 Bulk Account Import")
+        prog_win.geometry("480x400")
+        prog_win.configure(bg="#1a1a2e")
+
+        tk.Label(prog_win, text="📥 Bulk Import Progress",
+                 font=("Segoe UI", 14, "bold"), fg="#00d9ff", bg="#1a1a2e").pack(pady=10)
+
+        progress_var = tk.DoubleVar()
+        progress_bar = ttk.Progressbar(prog_win, variable=progress_var,
+                                        maximum=len(rows), length=400)
+        progress_bar.pack(pady=5)
+
+        status_text = tk.Text(prog_win, height=15, bg="#0f3460", fg="#ffffff",
+                               font=("Consolas", 9), state="disabled")
+        status_text.pack(fill="both", expand=True, padx=10, pady=5)
+
+        tk.Button(prog_win, text="Close", command=prog_win.destroy,
+                  bg="#888888", fg="#ffffff").pack(pady=5)
+
+        def _append(msg):
+            status_text.config(state="normal")
+            status_text.insert("end", msg + "\n")
+            status_text.see("end")
+            status_text.config(state="disabled")
+            prog_win.update_idletasks()
+
+        def _run():
+            from core.telegram_client import request_login_code, sign_in_with_code, run_async
+
+            for idx, (phone, name, level) in enumerate(rows):
+                progress_var.set(idx + 1)
+
+                # Check if already in accounts with valid session
+                existing = account_manager.get(name) or next(
+                    (a for a in account_manager.get_all() if a.get("phone") == phone), None
+                )
+                if existing:
+                    session_check = account_manager.check_session(existing["name"])
+                    if session_check["valid"]:
+                        _append(f"⏭️  {phone} – already authorized (session exists)")
+                        continue
+
+                try:
+                    result = run_async(request_login_code(phone))
+                    if result.get("already_authorized"):
+                        account_manager.add(name, phone, level)
+                        _append(f"✅ {phone} ({name}) – already authorized, added")
+                        continue
+
+                    phone_code_hash = result.get("phone_code_hash", "")
+                    _append(f"📱 {phone} – OTP sent. Waiting for user input…")
+
+                    # Ask user for OTP in GUI thread
+                    code_holder = [None]
+                    pw_holder = [""]
+                    event = threading.Event()
+
+                    def _ask_code(ph=phone, holder=code_holder, pw_h=pw_holder, ev=event):
+                        self._otp_input_dialog(ph, holder, pw_h, ev)
+
+                    prog_win.after(0, _ask_code)
+                    event.wait(timeout=_BULK_OTP_TIMEOUT_SECONDS)
+
+                    code = code_holder[0]
+                    password = pw_holder[0]
+
+                    if not code:
+                        _append(f"⏭️  {phone} – OTP skipped or timed out")
+                        continue
+
+                    sign_result = run_async(sign_in_with_code(phone, code, phone_code_hash, password))
+                    real_name = name or sign_result["user"]["first_name"] or phone
+                    account_manager.add(real_name, phone, level)
+                    _append(f"✅ {phone} ({real_name}) – login successful!")
+
+                except Exception as exc:
+                    _append(f"❌ {phone} – error: {exc}")
+
+            prog_win.after(0, lambda: (self._load_accounts(), _append("✅ Bulk import complete!")))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _otp_input_dialog(self, phone: str, code_holder: list, pw_holder: list, event: threading.Event):
+        """Show a modal OTP input dialog for *phone* during bulk import."""
+        otp_win = tk.Toplevel(self.frame)
+        otp_win.title(f"🔑 OTP for {phone}")
+        otp_win.geometry("360x280")
+        otp_win.configure(bg="#1a1a2e")
+        otp_win.transient(self.frame)
+        otp_win.grab_set()
+
+        tk.Label(otp_win, text=f"Enter OTP for\n{phone}",
+                 font=("Segoe UI", 12, "bold"), fg="#00d9ff", bg="#1a1a2e").pack(pady=10)
+        tk.Label(otp_win, text="Check your Telegram app",
+                 fg="#aaaaaa", bg="#1a1a2e").pack()
+
+        frm = tk.Frame(otp_win, bg="#0f3460")
+        frm.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(frm, text="OTP Code:", fg="#ffffff", bg="#0f3460").grid(row=0, column=0, padx=10, pady=6)
+        otp_entry = tk.Entry(frm, width=18, bg="#1a1a2e", fg="#ffffff",
+                              font=("Segoe UI", 13), justify="center")
+        otp_entry.grid(row=0, column=1, padx=10, pady=6)
+        otp_entry.focus_set()
+
+        tk.Label(frm, text="2FA Password:", fg="#ffffff", bg="#0f3460").grid(row=1, column=0, padx=10, pady=6)
+        pw_entry = tk.Entry(frm, width=18, bg="#1a1a2e", fg="#ffffff", show="●")
+        pw_entry.grid(row=1, column=1, padx=10, pady=6)
+
+        def _submit():
+            code_holder[0] = otp_entry.get().strip()
+            pw_holder[0] = pw_entry.get().strip()
+            otp_win.destroy()
+            event.set()
+
+        def _skip():
+            otp_win.destroy()
+            event.set()
+
+        btn_frm = tk.Frame(otp_win, bg="#1a1a2e")
+        btn_frm.pack(pady=8)
+        tk.Button(btn_frm, text="✅ Submit", command=_submit,
+                  bg="#00ff00", fg="#000000", font=("Segoe UI", 11, "bold"),
+                  padx=15).pack(side="left", padx=5)
+        tk.Button(btn_frm, text="⏭️ Skip", command=_skip,
+                  bg="#888888", fg="#ffffff").pack(side="left", padx=5)
+        otp_entry.bind("<Return>", lambda e: _submit())
     
     def _delete_selected(self):
         if not self.selected_accounts:
@@ -508,8 +806,10 @@ class AccountTab:
         menu = tk.Menu(self.frame, tearoff=0)
         menu.add_command(label="📄 Session File", command=self._import_session)
         menu.add_command(label="📁 Session Folder", command=self._import_sessions_folder)
-        menu.add_command(label="📞 Phones CSV", command=self._import_phones_csv)
+        menu.add_command(label="📞 Phones CSV (no OTP)", command=self._import_phones_csv)
         menu.add_command(label="📞 Phones TXT", command=self._import_phones_txt)
+        menu.add_separator()
+        menu.add_command(label="🔐 Bulk Login CSV (with OTP)", command=self._bulk_login_csv)
         menu.post(self.frame.winfo_rootx(), self.frame.winfo_rooty())
     
     def _import_session(self):
