@@ -921,8 +921,9 @@ class AccountTab:
     def _sync_feature_tabs(self):
         """Notify main_window to sync all feature tabs."""
         try:
-            if self.main_window and hasattr(self.main_window, "sync_feature_tabs"):
-                self.main_window.sync_feature_tabs()
+            mw = getattr(self, 'main_window', None)
+            if mw is not None and hasattr(mw, "sync_feature_tabs"):
+                mw.sync_feature_tabs()
         except Exception:
             pass
     

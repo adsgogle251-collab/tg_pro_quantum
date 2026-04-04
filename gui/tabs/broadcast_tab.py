@@ -213,7 +213,7 @@ class BroadcastTab:
                 group_list.append(f"Assigned ({len(assigned)})")
             group_list += ["All Accounts"] + list(groups.keys())
             self.group_combo['values'] = group_list
-            if assigned and not self.group_var.get():
+            if assigned and hasattr(self, 'group_var') and not self.group_var.get():
                 self.group_var.set(f"Assigned ({len(assigned)})")
             self._on_group_select()
         except Exception as e:
