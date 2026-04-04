@@ -1,0 +1,126 @@
+/*
+ * TG PRO QUANTUM – Phase 5A/5B CSS Reference
+ *
+ * NOTE: Tkinter does not use CSS. This file is kept for design reference
+ * only (e.g. for a future web-based admin panel or design-system docs).
+ *
+ * Colour palette
+ * ──────────────
+ * --primary:     #00D9FF;   /* Neon Cyan       */
+ * --secondary:   #7B2CBF;   /* Electric Purple */
+ * --accent:      #FF6B35;   /* Vibrant Orange  */
+ * --success:     #00FF41;   /* Lime Green      */
+ * --error:       #FF006E;   /* Hot Pink        */
+ * --warning:     #FFB800;   /* Gold            */
+ * --bg-dark:     #0A0E27;   /* Deep Dark       */
+ * --bg-medium:   #1A1F3A;   /* Medium Dark     */
+ * --bg-light:    #252D4A;   /* Light Dark      */
+ * --text:        #E0E0FF;   /* Main text       */
+ * --text-muted:  #9099B7;   /* Secondary text  */
+ * --border:      #2A3550;
+ */
+
+:root {
+  --primary:    #00D9FF;
+  --secondary:  #7B2CBF;
+  --accent:     #FF6B35;
+  --success:    #00FF41;
+  --error:      #FF006E;
+  --warning:    #FFB800;
+  --bg-dark:    #0A0E27;
+  --bg-medium:  #1A1F3A;
+  --bg-light:   #252D4A;
+  --text:       #E0E0FF;
+  --text-muted: #9099B7;
+  --border:     #2A3550;
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-dark);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-medium);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: border-color 0.2s ease;
+}
+.card:hover { border-color: var(--primary); }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn:hover  { filter: brightness(1.12); }
+
+.btn-primary   { background: var(--primary);   color: var(--bg-dark);  }
+.btn-secondary { background: var(--secondary); color: #fff; }
+.btn-accent    { background: var(--accent);    color: #fff; }
+.btn-success   { background: var(--success);   color: var(--bg-dark);  }
+.btn-danger    { background: var(--error);      color: #fff; }
+.btn-ghost     { background: var(--bg-light);  color: var(--text);     }
+
+/* ── Progress bar ───────────────────────────────────────────────────────── */
+.progress-track {
+  height: 10px;
+  background: var(--bg-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  min-width: 260px;
+  background: var(--bg-medium);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: slide-in 0.25s ease;
+}
+.toast.success { border-left-color: var(--success); }
+.toast.error   { border-left-color: var(--error);   }
+.toast.warning { border-left-color: var(--warning);  }
+
+@keyframes slide-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Stat card ──────────────────────────────────────────────────────────── */
+.stat-card { text-align: left; }
+.stat-card .stat-title { font-size: 11px; color: var(--text-muted); }
+.stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-card .stat-sub   { font-size: 10px; color: var(--text-muted); }
