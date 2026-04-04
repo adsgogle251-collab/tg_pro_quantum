@@ -1069,12 +1069,14 @@ class AccountTab:
                   bg="#00ff00", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="right", padx=5)
     
     def _sync_groups_to_broadcast(self):
+        # Emit state change to sync all tabs (broadcast_tab listens via state_manager)
+        state_manager.emit_state_change("account_assigned", {"feature": "groups_updated"})
         if hasattr(self.main_window, 'broadcast_tab'):
             try:
                 self.main_window.broadcast_tab._load_broadcast_groups()
-                log("Groups synced to Broadcast tab", "success")
+                log("Grup disinkronkan ke tab Siaran", "success")
             except Exception as e:
-                log(f"Failed to sync groups: {e}", "error")
+                log(f"Gagal sinkronisasi grup: {e}", "error")
     
     def _refresh(self):
         self._load_accounts()

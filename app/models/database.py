@@ -212,3 +212,28 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="audit_logs")
+
+
+class AccountFeature(Base):
+    """Account-Feature assignment."""
+    __tablename__ = "account_features"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id"), nullable=False, index=True)
+    feature = Column(String(64), nullable=False)
+    status = Column(String(32), default="active")
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("account_id", "feature", name="uq_account_feature"),)
+
+
+class AccountGroupAssignment(Base):
+    """Account-Group assignment."""
+    __tablename__ = "account_group_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id"), nullable=False, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("account_id", "group_id", name="uq_account_group"),)
