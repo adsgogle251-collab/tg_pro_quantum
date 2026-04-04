@@ -168,7 +168,8 @@ def setup_theme(root=None):
 def make_btn(parent, text, command=None, color=None, fg=None, **kwargs):
     """Create a modern styled button"""
     bg = color or COLORS["primary"]
-    text_color = fg or ("#000000" if bg in (COLORS["primary"], COLORS["success"], COLORS["accent"]) else "#ffffff")
+    _light_bg_colors = {COLORS["primary"], COLORS["success"], COLORS["accent"]}
+    text_color = fg or ("#000000" if bg in _light_bg_colors else "#ffffff")
     btn = tk.Button(
         parent,
         text=text,
@@ -183,10 +184,10 @@ def make_btn(parent, text, command=None, color=None, fg=None, **kwargs):
         **kwargs
     )
 
-    def on_enter(e):
+    def on_enter(event):
         btn.config(relief="groove")
 
-    def on_leave(e):
+    def on_leave(event):
         btn.config(relief="flat")
 
     btn.bind("<Enter>", on_enter)
