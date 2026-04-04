@@ -279,6 +279,77 @@ class AccountManager:
                       for name, accounts in groups.items()}
         }
 
+    # ═══════════════════════════════════════════════════════
+    # FEATURE ASSIGNMENT METHODS
+    # ═══════════════════════════════════════════════════════
+    
+    def assign_feature(self, account_name: str, feature: str) -> bool:
+        """Assign feature to account"""
+        if account_name not in self.accounts:
+            log(f"Account {account_name} not found", "warning")
+            return False
+        acc = self.accounts[account_name]
+        features = acc.get("features", [])
+        if feature not in features:
+            features.append(feature)
+            acc["features"] = features
+            self._save_accounts()
+            log(f"Feature '{feature}' assigned to {account_name}", "success")
+        return True
+    
+    def remove_feature(self, account_name: str, feature: str) -> bool:
+        """Remove feature from account"""
+        if account_name not in self.accounts:
+            return False
+        acc = self.accounts[account_name]
+        features = acc.get("features", [])
+        if feature in features:
+            features.remove(feature)
+            acc["features"] = features
+            self._save_accounts()
+            log(f"Feature '{feature}' removed from {account_name}", "info")
+            return True
+        return False
+    
+    def get_account_features(self, account_name: str) -> List[str]:
+        """Get all features assigned to account"""
+        acc = self.accounts.get(account_name, {})
+        return acc.get("features", [])
+    
+    def get_accounts_by_feature(self, feature: str) -> List[dict]:
+        """Get all accounts assigned to a specific feature"""
+        result = []
+        for name, acc in self.accounts.items():
+            if feature in acc.get("features", []):
+                result.append(acc)
+        return result
+    
+    def get_featured_accounts(self) -> Dict:
+        """Get {feature: [account_names]} mapping"""
+        features = ["broadcast", "campaign", "finder", "scrape", "join", "ai_cs", "analytics", "crm", "cs"]
+        result = {f: [] for f in features}
+        for name, acc in self.accounts.items():
+            for feature in acc.get("features", []):
+                if feature in result:
+                    result[feature].append(name)
+        return result
+    
+    def get_all_assignments(self) -> Dict:
+        """Get all feature & group assignments"""
+        return {
+            "features": self.get_featured_accounts(),
+            "groups": self.get_all_groups()
+        }
+    
+    def unassign_all_features(self, account_name: str) -> bool:
+        """Remove all feature assignments from account"""
+        if account_name not in self.accounts:
+            return False
+        self.accounts[account_name]["features"] = []
+        self._save_accounts()
+        log(f"All features removed from {account_name}", "info")
+        return True
+
 
 # Global instance
 account_manager = AccountManager()

@@ -75,6 +75,8 @@ from . import crm_engine
 from . import billing_engine
 from . import whitelabel_manager
 from . import gdpr_compliance
+from . import state_manager  # ✅ State manager for tab sync
+from . import localization    # ✅ Bahasa Indonesia localization
 
 # === PHASE 4-5 MODULES ===
 from . import templates
@@ -109,6 +111,8 @@ from .crm_engine import crm_engine
 from .billing_engine import billing_engine
 from .whitelabel_manager import whitelabel_manager
 from .gdpr_compliance import gdpr_compliance
+from .state_manager import state_manager  # ✅ State manager instance
+from .localization import t               # ✅ Translation function
 from .auto_backup import auto_backup
 from .notification_manager import notification_manager
 from .help_manager import help_manager
@@ -161,12 +165,14 @@ __all__ = [
     "backup_manager", "scheduler", "account_manager", "account_router",
     "import_manager", "ai_cs_engine", "encryption", "session_manager",
     "task_queue", "cache_manager", "init_engines",
+    "state_manager", "localization",
     
     # === Engine Instances ===
     "crm_engine",
     "billing_engine",
     "whitelabel_manager",
     "gdpr_compliance",
+    "state_manager", "t",
     
     # === PHASE 4-5 Modules & Instances ===
     "templates", "template_manager",
