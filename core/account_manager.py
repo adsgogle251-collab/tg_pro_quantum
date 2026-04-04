@@ -377,6 +377,13 @@ class AccountManager:
             return []
         return acc.get("assigned_groups", [])
 
+    def get_account_features(self, account_name: str) -> List[str]:
+        """Return the list of features assigned to an account."""
+        acc = self.accounts.get(account_name)
+        if not acc:
+            return []
+        return acc.get("features", [])
+
 
 # Global instance
 account_manager = AccountManager()
