@@ -434,7 +434,7 @@ class BroadcastTab:
             tk.Radiobutton(body, text=lbl, variable=v_schedule, value=val,
                            bg=BG, fg=TEXT, selectcolor=CARD,
                            activebackground=BG).pack(anchor="w", padx=25, pady=2)
-        v_sched_dt = labeled_entry(body, "Date/Time (optional):", "YYYY-MM-DD HH:MM")  # noqa: F841
+        v_sched_dt = labeled_entry(body, "Date/Time (optional):", "YYYY-MM-DD HH:MM")
 
         row_timing = tk.Frame(body, bg=BG)
         row_timing.pack(fill="x", padx=15, pady=3)
@@ -442,7 +442,7 @@ class BroadcastTab:
         tk.Checkbutton(row_timing, text="24/7  OR  Custom hours:",
                        variable=v_24h, bg=BG, fg=TEXT,
                        selectcolor=CARD, activebackground=BG).pack(side="left")
-        v_timing = labeled_entry(row_timing, "", "08:00-22:00")  # noqa: F841
+        v_timing = labeled_entry(row_timing, "", "08:00-22:00")
 
         # ── Advanced ───────────────────────────────────────────────────────────
         section_header("⚙️ ADVANCED")
@@ -478,14 +478,20 @@ class BroadcastTab:
                 return
             try:
                 camp = campaign_manager.create_campaign(name=name)
-                # Set message on the created campaign
+                # Set message and optional Phase 3 fields on the created campaign
+                timing_str = v_timing.get().strip()
+                timing_parts = timing_str.split("-") if "-" in timing_str else []
+                extra: dict = {
+                    "message_text": msg,
+                    "media_url": v_media.get().strip() or None,
+                    "link_url": v_link.get().strip() or None,
+                    "timing_start": timing_parts[0] if len(timing_parts) >= 1 else None,
+                    "timing_end": timing_parts[1] if len(timing_parts) >= 2 else None,
+                }
+                # Remove None values to avoid overwriting existing fields
+                extra = {k: v for k, v in extra.items() if v is not None}
                 try:
-                    campaign_manager.update_campaign(
-                        camp.id,
-                        message_text=msg,
-                        media_url=v_media.get().strip() or None,
-                        link_url=v_link.get().strip() or None,
-                    )
+                    campaign_manager.update_campaign(camp.id, **extra)
                 except Exception:
                     pass
                 log(f"Campaign '{name}' created", "success")
@@ -496,9 +502,19 @@ class BroadcastTab:
                 messagebox.showerror("Error", str(exc), parent=modal)
 
         def _on_schedule():
-            messagebox.showinfo("Schedule",
-                                "Scheduling not yet connected to backend.",
-                                parent=modal)
+            dt_str = v_sched_dt.get().strip()
+            if not dt_str or dt_str == "YYYY-MM-DD HH:MM":
+                messagebox.showwarning(
+                    "Schedule",
+                    "Enter a date/time in 'YYYY-MM-DD HH:MM' format.",
+                    parent=modal,
+                )
+                return
+            messagebox.showinfo(
+                "Schedule",
+                f"Scheduled for: {dt_str}\n(Backend integration pending.)",
+                parent=modal,
+            )
 
         tk.Button(btn_row, text="PREVIEW", bg=CARD, fg=CYAN,
                   font=FONTS["body"], relief="flat", padx=15, pady=8,

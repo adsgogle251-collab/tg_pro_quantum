@@ -21,6 +21,7 @@ MAX_USERNAME_LEN = 32
 SPAM_KEYWORDS = frozenset(
     ["spam", "ads", "promo_bot", "scam", "fake", "test123"]
 )
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{1,32}$")
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -191,7 +192,7 @@ class GroupVerificationService:
 
     @staticmethod
     def _valid_username(username: str) -> bool:
-        return bool(re.fullmatch(r"[a-z0-9_]{1,32}", username))
+        return bool(_USERNAME_RE.match(username))
 
     @staticmethod
     def _looks_like_channel(username: str) -> bool:
