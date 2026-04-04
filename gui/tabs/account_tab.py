@@ -860,8 +860,9 @@ class AccountTab:
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "broadcast")
         self._load_accounts()
+        self._sync_feature_tabs()
         messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Broadcast")
-    
+
     def _bulk_assign_finder(self):
         if not self.selected_accounts:
             messagebox.showwarning("Warning", "Select accounts first!")
@@ -869,8 +870,9 @@ class AccountTab:
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "finder")
         self._load_accounts()
+        self._sync_feature_tabs()
         messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Finder")
-    
+
     def _bulk_assign_scrape(self):
         if not self.selected_accounts:
             messagebox.showwarning("Warning", "Select accounts first!")
@@ -878,8 +880,9 @@ class AccountTab:
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "scrape")
         self._load_accounts()
+        self._sync_feature_tabs()
         messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Scrape")
-    
+
     def _bulk_assign_join(self):
         if not self.selected_accounts:
             messagebox.showwarning("Warning", "Select accounts first!")
@@ -887,8 +890,9 @@ class AccountTab:
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "join")
         self._load_accounts()
+        self._sync_feature_tabs()
         messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Join")
-    
+
     def _bulk_assign_cs(self):
         if not self.selected_accounts:
             messagebox.showwarning("Warning", "Select accounts first!")
@@ -896,8 +900,9 @@ class AccountTab:
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "cs")
         self._load_accounts()
+        self._sync_feature_tabs()
         messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to CS")
-    
+
     def _bulk_unassign(self):
         if not self.selected_accounts:
             messagebox.showwarning("Warning", "Select accounts first!")
@@ -907,9 +912,20 @@ class AccountTab:
                 acc = account_manager.get(name)
                 if acc:
                     acc["features"] = []
+                    acc["assigned_groups"] = []
             account_manager._save_accounts()
             self._load_accounts()
+            self._sync_feature_tabs()
             messagebox.showinfo("Success", f"Unassigned {len(self.selected_accounts)} accounts")
+
+    def _sync_feature_tabs(self):
+        """Notify main_window to sync all feature tabs."""
+        try:
+            mw = getattr(self, 'main_window', None)
+            if mw is not None and hasattr(mw, "sync_feature_tabs"):
+                mw.sync_feature_tabs()
+        except Exception:
+            pass
     
     # ═══════════════════════════════════════════════════════
     # GROUP MANAGEMENT

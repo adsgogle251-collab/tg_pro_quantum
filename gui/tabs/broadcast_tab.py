@@ -206,16 +206,35 @@ class BroadcastTab:
     def _load_broadcast_groups(self):
         try:
             groups = account_manager.load_groups()
-            group_list = ["All Accounts"] + list(groups.keys())
+            # Include "Assigned (Broadcast)" as first option for auto-loaded accounts
+            assigned = account_manager.get_accounts_by_feature("broadcast")
+            group_list = []
+            if assigned:
+                group_list.append(f"Assigned ({len(assigned)})")
+            group_list += ["All Accounts"] + list(groups.keys())
             self.group_combo['values'] = group_list
+            if assigned and hasattr(self, 'group_var') and not self.group_var.get():
+                self.group_var.set(f"Assigned ({len(assigned)})")
             self._on_group_select()
         except Exception as e:
             log(f"Error loading groups: {e}", "error")
-    
+
+    def refresh_assigned_accounts(self):
+        """Refresh account dropdown from feature assignments - called on tab focus."""
+        self._load_broadcast_groups()
+
+    def _on_tab_selected(self):
+        """Called by main_window when this tab is selected."""
+        self.refresh_assigned_accounts()
+        self._load_campaigns()
+
     def _on_group_select(self, e=None):
         grp = self.group_var.get()
         try:
-            if grp == "All Accounts":
+            if grp.startswith("Assigned"):
+                accounts = account_manager.get_accounts_by_feature("broadcast")
+                cnt = len(accounts)
+            elif grp == "All Accounts":
                 cnt = len(account_manager.get_all())
             else:
                 cnt = len(account_manager.get_group_accounts(grp))
@@ -282,7 +301,9 @@ class BroadcastTab:
             return
         
         grp = self.group_var.get()
-        if grp == "All Accounts":
+        if grp.startswith("Assigned"):
+            accs = [a['name'] for a in account_manager.get_accounts_by_feature("broadcast")]
+        elif grp == "All Accounts":
             accs = [a['name'] for a in account_manager.get_all()]
         else:
             accs = account_manager.get_group_accounts(grp)

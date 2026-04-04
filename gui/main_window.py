@@ -272,11 +272,34 @@ class MainWindow:
                 self.account_tab._load_accounts()
             elif index == 4 and hasattr(self, 'campaign_tab'):
                 self.campaign_tab._refresh()
+            elif index == 5 and "finder" in self.tabs:
+                self.tabs["finder"]._on_tab_selected()
+            elif index == 6 and "scrape" in self.tabs:
+                self.tabs["scrape"]._on_tab_selected()
+            elif index == 7 and "join" in self.tabs:
+                self.tabs["join"]._on_tab_selected()
+            elif index == 8 and "ai_cs" in self.tabs:
+                self.tabs["ai_cs"]._on_tab_selected()
             elif index == 17 and hasattr(self, 'log_tab'):
                 self.log_tab._refresh()
         except Exception as e:
             log(f"Error refreshing tab {index}: {e}", "warning")
-    
+
+    def sync_feature_tabs(self):
+        """Refresh all feature tabs after account/feature changes."""
+        try:
+            if "broadcast" in self.tabs:
+                self.tabs["broadcast"].refresh_assigned_accounts()
+        except Exception:
+            pass
+        for name in ("finder", "scrape", "join", "ai_cs"):
+            try:
+                tab = self.tabs.get(name)
+                if tab and hasattr(tab, "_on_tab_selected"):
+                    tab._on_tab_selected()
+            except Exception:
+                pass
+
     # ═══════════════════════════════════════════════════════
     # SERVICES
     # ═══════════════════════════════════════════════════════

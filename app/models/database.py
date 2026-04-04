@@ -109,6 +109,8 @@ class TelegramAccount(Base):
 
     client = relationship("Client", back_populates="accounts")
     broadcast_logs = relationship("BroadcastLog", back_populates="account")
+    feature_assignments = relationship("AccountFeature", back_populates="account", cascade="all, delete-orphan")
+    group_links = relationship("AccountGroupLink", back_populates="account", cascade="all, delete-orphan")
 
 
 class Group(Base):
@@ -127,6 +129,7 @@ class Group(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="groups")
+    account_links = relationship("AccountGroupLink", back_populates="group", cascade="all, delete-orphan")
 
 
 class Campaign(Base):
@@ -212,3 +215,33 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="audit_logs")
+
+
+class AccountFeature(Base):
+    """Maps a Telegram account to a functional feature (broadcast, scrape, join, etc.)."""
+    __tablename__ = "account_features"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    feature = Column(String(64), nullable=False)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(String(32), default="active", nullable=False)
+
+    __table_args__ = (UniqueConstraint("account_id", "feature", name="uq_account_feature"),)
+
+    account = relationship("TelegramAccount", back_populates="feature_assignments")
+
+
+class AccountGroupLink(Base):
+    """Associates a Telegram account with a target Group for a specific feature."""
+    __tablename__ = "account_group_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("account_id", "group_id", name="uq_account_group"),)
+
+    account = relationship("TelegramAccount", back_populates="group_links")
+    group = relationship("Group", back_populates="account_links")

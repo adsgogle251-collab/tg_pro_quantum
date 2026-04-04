@@ -4,15 +4,16 @@ TG PRO QUANTUM - Telegram Account Management Routes
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
 from app.database import get_db
-from app.models.database import AccountStatus, Client, TelegramAccount
+from app.models.database import AccountStatus, Client, TelegramAccount, AccountFeature, AccountGroupLink, Group
 from app.models.schemas import (
     AccountCreate, AccountResponse, AccountUpdate, MessageResponse,
     TelegramLoginRequest, TelegramLoginResponse, TelegramVerifyRequest,
+    AccountFeatureResponse, AccountGroupLinkResponse,
 )
 from app.core.account_manager import account_manager as acct_mgr
 
@@ -214,3 +215,187 @@ async def verify_telegram_code(
     await db.flush()
     await db.refresh(account)
     return account
+
+
+# ── Feature Assignment Endpoints ───────────────────────────────────────────────
+
+@router.post("/{account_id}/features/{feature}", response_model=AccountFeatureResponse, status_code=status.HTTP_201_CREATED)
+async def assign_feature(
+    account_id: int,
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Assign a feature to a Telegram account."""
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    existing = await db.execute(
+        select(AccountFeature).where(
+            AccountFeature.account_id == account_id,
+            AccountFeature.feature == feature,
+        )
+    )
+    af = existing.scalar_one_or_none()
+    if af:
+        af.status = "active"
+    else:
+        af = AccountFeature(account_id=account_id, feature=feature)
+        db.add(af)
+    await db.flush()
+    await db.refresh(af)
+    return af
+
+
+@router.delete("/{account_id}/features/{feature}", response_model=MessageResponse)
+async def remove_feature(
+    account_id: int,
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Remove a feature assignment from a Telegram account."""
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    await db.execute(
+        delete(AccountFeature).where(
+            AccountFeature.account_id == account_id,
+            AccountFeature.feature == feature,
+        )
+    )
+    return MessageResponse(message=f"Feature '{feature}' removed from account {account_id}")
+
+
+@router.get("/by-feature/{feature}", response_model=List[AccountResponse])
+async def get_accounts_by_feature(
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get all accounts assigned to a specific feature."""
+    result = await db.execute(
+        select(TelegramAccount)
+        .join(AccountFeature, AccountFeature.account_id == TelegramAccount.id)
+        .where(
+            TelegramAccount.client_id == current_client.id,
+            AccountFeature.feature == feature,
+            AccountFeature.status == "active",
+        )
+    )
+    return result.scalars().all()
+
+
+@router.get("/assignments", response_model=dict)
+async def get_all_assignments(
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get all feature and group assignments for the current client."""
+    result = await db.execute(
+        select(AccountFeature)
+        .join(TelegramAccount, TelegramAccount.id == AccountFeature.account_id)
+        .where(TelegramAccount.client_id == current_client.id)
+    )
+    features = result.scalars().all()
+
+    result2 = await db.execute(
+        select(AccountGroupLink)
+        .join(TelegramAccount, TelegramAccount.id == AccountGroupLink.account_id)
+        .where(TelegramAccount.client_id == current_client.id)
+    )
+    group_links = result2.scalars().all()
+
+    assignments: dict = {}
+    for af in features:
+        assignments.setdefault(af.account_id, {"features": [], "groups": []})
+        assignments[af.account_id]["features"].append(af.feature)
+    for gl in group_links:
+        assignments.setdefault(gl.account_id, {"features": [], "groups": []})
+        assignments[gl.account_id]["groups"].append(gl.group_id)
+
+    return assignments
+
+
+# ── Group Link Endpoints ───────────────────────────────────────────────────────
+
+@router.post("/{account_id}/groups/{group_id}", response_model=AccountGroupLinkResponse, status_code=status.HTTP_201_CREATED)
+async def assign_group_to_account(
+    account_id: int,
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Assign a group to a Telegram account."""
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    grp_result = await db.execute(select(Group).where(Group.id == group_id))
+    group = grp_result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    existing = await db.execute(
+        select(AccountGroupLink).where(
+            AccountGroupLink.account_id == account_id,
+            AccountGroupLink.group_id == group_id,
+        )
+    )
+    link = existing.scalar_one_or_none()
+    if not link:
+        link = AccountGroupLink(account_id=account_id, group_id=group_id)
+        db.add(link)
+        await db.flush()
+        await db.refresh(link)
+    return link
+
+
+@router.delete("/{account_id}/groups/{group_id}", response_model=MessageResponse)
+async def remove_group_from_account(
+    account_id: int,
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Remove a group assignment from a Telegram account."""
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    await db.execute(
+        delete(AccountGroupLink).where(
+            AccountGroupLink.account_id == account_id,
+            AccountGroupLink.group_id == group_id,
+        )
+    )
+    return MessageResponse(message=f"Group {group_id} unlinked from account {account_id}")
+
+
+@router.get("/{account_id}/groups", response_model=List[AccountGroupLinkResponse])
+async def get_account_groups(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get all groups linked to a Telegram account."""
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    links_result = await db.execute(
+        select(AccountGroupLink).where(AccountGroupLink.account_id == account_id)
+    )
+    return links_result.scalars().all()
