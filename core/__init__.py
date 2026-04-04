@@ -93,6 +93,9 @@ from . import help_manager
 from . import scheduler_24h  # ✅ 24/7 scheduler
 from . import report_generator  # ✅ Auto report generator
 
+# === ENTERPRISE MODULES ===
+from . import account_group_manager  # ✅ Account group pools
+
 # === IMPORT INSTANCES FOR EASY ACCESS ===
 from .account_manager import account_manager
 from .account_router import account_router
@@ -120,6 +123,7 @@ from .help_manager import help_manager
 # === PHASE 10 INSTANCES ===
 from .scheduler_24h import scheduler_24h  # ✅ 24/7 scheduler instance
 from .report_generator import report_generator  # ✅ Report generator instance
+from .account_group_manager import account_group_manager  # ✅ Account group manager instance
 
 # === IMPORT UTILITY FUNCTIONS ===
 from .utils import (
@@ -187,6 +191,9 @@ __all__ = [
     # === PHASE 10 Modules & Instances ===
     "scheduler_24h",  # ✅ 24/7 scheduler
     "report_generator",  # ✅ Auto report generator
+
+    # === Enterprise Modules & Instances ===
+    "account_group_manager",  # ✅ Account group pools
     
     # === Utility Functions ===
     "load_groups", "save_group",

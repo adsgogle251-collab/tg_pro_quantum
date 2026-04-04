@@ -245,3 +245,90 @@ class AccountGroupLink(Base):
 
     account = relationship("TelegramAccount", back_populates="group_links")
     group = relationship("Group", back_populates="account_links")
+
+
+# ── New Enterprise Tables ─────────────────────────────────────────────────────
+
+class AccountGroupFeatureType(str, enum.Enum):
+    broadcast = "broadcast"
+    finder = "finder"
+    scrape = "scrape"
+    join = "join"
+    cs = "cs"
+    warmer = "warmer"
+    general = "general"
+
+
+class AccountGroupStatus(str, enum.Enum):
+    active = "active"
+    paused = "paused"
+    archived = "archived"
+
+
+class AccountGroup(Base):
+    """Named account pool that can be assigned to one or more features / clients."""
+    __tablename__ = "account_groups_v2"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    feature_type = Column(Enum(AccountGroupFeatureType), default=AccountGroupFeatureType.general, nullable=False)
+    status = Column(Enum(AccountGroupStatus), default=AccountGroupStatus.active, nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="SET NULL"), nullable=True, index=True)
+    config = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    client = relationship("Client")
+    assignments = relationship("AccountAssignment", back_populates="account_group", cascade="all, delete-orphan")
+    health_records = relationship("AccountHealth", back_populates="account_group", cascade="all, delete-orphan")
+    analytics_records = relationship("GroupAnalytics", back_populates="account_group", cascade="all, delete-orphan")
+
+
+class AccountAssignment(Base):
+    """Associates a TelegramAccount with an AccountGroup for a specific feature."""
+    __tablename__ = "account_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_group_id = Column(Integer, ForeignKey("account_groups_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+    feature_type = Column(String(64), nullable=False, default="general")
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(String(32), default="active", nullable=False)
+
+    __table_args__ = (UniqueConstraint("account_id", "account_group_id", name="uq_account_assignment"),)
+
+    account = relationship("TelegramAccount")
+    account_group = relationship("AccountGroup", back_populates="assignments")
+
+
+class AccountHealth(Base):
+    """Health snapshot for a Telegram account within a group."""
+    __tablename__ = "account_health"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_group_id = Column(Integer, ForeignKey("account_groups_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+    health_score = Column(Float, default=100.0, nullable=False)
+    warnings = Column(Integer, default=0, nullable=False)
+    is_banned = Column(Boolean, default=False, nullable=False)
+    last_check = Column(DateTime(timezone=True), server_default=func.now())
+    details = Column(JSON, default=dict)
+
+    account = relationship("TelegramAccount")
+    account_group = relationship("AccountGroup", back_populates="health_records")
+
+
+class GroupAnalytics(Base):
+    """Aggregated analytics for an account group."""
+    __tablename__ = "group_analytics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_group_id = Column(Integer, ForeignKey("account_groups_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+    messages_sent = Column(Integer, default=0, nullable=False)
+    success_rate = Column(Float, default=0.0, nullable=False)
+    health_avg = Column(Float, default=100.0, nullable=False)
+    period_start = Column(DateTime(timezone=True), nullable=False)
+    period_end = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    account_group = relationship("AccountGroup", back_populates="analytics_records")
