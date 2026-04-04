@@ -343,3 +343,113 @@ class GroupAnalytics(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     account_group = relationship("AccountGroup", back_populates="analytics_records")
+
+
+# ── Phase 3 Tables ────────────────────────────────────────────────────────────
+
+class GroupVerificationStatus(str, enum.Enum):
+    pending = "pending"
+    verified = "verified"
+    failed = "failed"
+
+
+class CampaignActivity(Base):
+    """Detailed per-message activity log for a campaign."""
+    __tablename__ = "campaign_activities"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_name = Column(String(255), nullable=False)
+    group_target = Column(String(255), nullable=False)
+    success = Column(Boolean, default=False, nullable=False)
+    error_type = Column(String(100))       # user_limit, banned, spam, etc.
+    error_message = Column(Text)
+    duration_ms = Column(Integer)          # round-trip time in milliseconds
+    attempt_number = Column(Integer, default=1)
+    action_taken = Column(String(50))      # retry, skip, pause
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    campaign = relationship("Campaign")
+    client = relationship("Client")
+
+
+class FailedMessage(Base):
+    """Retry queue for failed broadcast messages."""
+    __tablename__ = "failed_messages"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_target = Column(String(255), nullable=False)
+    account_name = Column(String(255))
+    error_type = Column(String(100))
+    error_message = Column(Text)
+    retry_count = Column(Integer, default=0)
+    next_retry_at = Column(DateTime(timezone=True))
+    is_dead_letter = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    campaign = relationship("Campaign")
+    client = relationship("Client")
+
+
+class SafetyAlert(Base):
+    """Safety alerts and admin notifications."""
+    __tablename__ = "safety_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    alert_type = Column(String(100), nullable=False)  # ban_detected, success_rate_drop, campaign_stuck, etc.
+    severity = Column(String(20), default="warning")  # warning, critical
+    message = Column(Text, nullable=False)
+    is_resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    campaign = relationship("Campaign")
+    client = relationship("Client")
+
+
+class ClientBroadcastStats(Base):
+    """Per-client aggregated broadcast statistics (daily snapshot)."""
+    __tablename__ = "client_broadcast_stats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(DateTime(timezone=True), nullable=False)
+    messages_sent = Column(Integer, default=0)
+    messages_failed = Column(Integer, default=0)
+    success_rate = Column(Float, default=0.0)
+    active_campaigns = Column(Integer, default=0)
+    accounts_used = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client")
+
+
+# ── Phase 3 Campaign extra columns (added via alembic or create_all) ──────────
+# These columns are added to the existing Campaign model:
+
+# Extend Campaign with Phase 3 fields
+Campaign.group_verification_status = Column(
+    Enum(GroupVerificationStatus),
+    default=GroupVerificationStatus.pending,
+    nullable=True,
+)
+Campaign.safety_flags = Column(JSON, default=dict)
+Campaign.error_count = Column(Integer, default=0)
+Campaign.last_error_message = Column(Text, nullable=True)
+Campaign.failed_groups_log = Column(JSON, default=list)
+Campaign.account_group_id = Column(
+    Integer, ForeignKey("account_groups_v2.id", ondelete="SET NULL"), nullable=True
+)
+Campaign.jitter_pct = Column(Float, default=10.0)   # ± percent jitter on delay
+Campaign.max_per_hour = Column(Integer, default=100)
+Campaign.max_per_day = Column(Integer, default=500)
+Campaign.rotate_every = Column(Integer, default=20)  # rotate account every N messages
+Campaign.link_url = Column(String(512), nullable=True)
+Campaign.timing_start = Column(String(8), nullable=True)   # "08:00"
+Campaign.timing_end = Column(String(8), nullable=True)     # "22:00"

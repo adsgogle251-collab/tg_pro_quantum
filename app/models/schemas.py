@@ -409,3 +409,154 @@ class GroupAnalyticsResponse(OrmBase):
 class AccountGroupBulkImport(BaseModel):
     account_ids: List[int] = Field(..., min_length=1)
     feature_type: str = "general"
+
+
+# ── Phase 3 Schemas ───────────────────────────────────────────────────────────
+
+class CampaignActivityResponse(OrmBase):
+    id: int
+    campaign_id: int
+    client_id: int
+    account_name: str
+    group_target: str
+    success: bool
+    error_type: Optional[str]
+    error_message: Optional[str]
+    duration_ms: Optional[int]
+    attempt_number: int
+    action_taken: Optional[str]
+    created_at: datetime
+
+
+class FailedMessageResponse(OrmBase):
+    id: int
+    campaign_id: int
+    client_id: int
+    group_target: str
+    account_name: Optional[str]
+    error_type: Optional[str]
+    error_message: Optional[str]
+    retry_count: int
+    next_retry_at: Optional[datetime]
+    is_dead_letter: bool
+    created_at: datetime
+
+
+class SafetyAlertResponse(OrmBase):
+    id: int
+    campaign_id: Optional[int]
+    client_id: int
+    alert_type: str
+    severity: str
+    message: str
+    is_resolved: bool
+    resolved_at: Optional[datetime]
+    created_at: datetime
+
+
+class ClientBroadcastStatsResponse(OrmBase):
+    id: int
+    client_id: int
+    date: datetime
+    messages_sent: int
+    messages_failed: int
+    success_rate: float
+    active_campaigns: int
+    accounts_used: int
+
+
+class GroupVerifyRequest(BaseModel):
+    group_usernames: List[str] = Field(..., min_length=1)
+    min_members: int = Field(10, ge=0)
+
+
+class GroupVerifyResult(BaseModel):
+    username: str
+    verified: bool
+    member_count: Optional[int]
+    is_group: Optional[bool]
+    reason: Optional[str]
+
+
+class GroupVerifyResponse(BaseModel):
+    verified: List[GroupVerifyResult]
+    total: int
+    passed: int
+    failed: int
+
+
+class MultiClientCampaignCard(BaseModel):
+    client_id: int
+    client_name: str
+    campaign_id: int
+    campaign_name: str
+    status: str
+    progress_pct: float
+    sent_count: int
+    total_targets: int
+    success_rate: float
+    active_accounts: int
+    elapsed_minutes: Optional[float]
+
+
+class BroadcastOverviewResponse(BaseModel):
+    total_active_campaigns: int
+    messages_sent_24h: int
+    overall_success_rate: float
+    total_accounts: int
+    healthy_accounts: int
+    campaigns: List[MultiClientCampaignCard]
+
+
+class CampaignDetailResponse(OrmBase):
+    """Extended campaign response with Phase 3 fields."""
+    id: int
+    client_id: int
+    name: str
+    message_text: str
+    media_url: Optional[str]
+    link_url: Optional[str]
+    status: CampaignStatus
+    mode: CampaignMode
+    scheduled_at: Optional[datetime]
+    total_targets: int
+    sent_count: int
+    failed_count: int
+    retry_count: int
+    jitter_pct: Optional[float]
+    max_per_hour: Optional[int]
+    max_per_day: Optional[int]
+    rotate_every: Optional[int]
+    timing_start: Optional[str]
+    timing_end: Optional[str]
+    safety_flags: Optional[Dict[str, Any]]
+    error_count: Optional[int]
+    last_error_message: Optional[str]
+    account_group_id: Optional[int]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+
+class BroadcastCampaignCreate(BaseModel):
+    """Schema for creating a campaign with Phase 3 fields."""
+    name: str = Field(..., min_length=1, max_length=255)
+    client_id: Optional[int] = None     # admin only; regular users use their own id
+    message_text: str = Field(..., min_length=1)
+    media_url: Optional[str] = None
+    link_url: Optional[str] = None
+    mode: CampaignMode = CampaignMode.once
+    scheduled_at: Optional[datetime] = None
+    timing_start: Optional[str] = None
+    timing_end: Optional[str] = None
+    target_group_ids: List[int] = Field(default_factory=list)
+    account_ids: List[int] = Field(default_factory=list)
+    account_group_id: Optional[int] = None
+    delay_min: float = Field(30.0, ge=1.0)
+    delay_max: float = Field(33.0, ge=1.0)
+    jitter_pct: float = Field(10.0, ge=0.0, le=50.0)
+    max_retries: int = Field(3, ge=0)
+    max_per_hour: int = Field(100, ge=1)
+    max_per_day: int = Field(500, ge=1)
+    rotate_every: int = Field(20, ge=1)
+    safety_flags: Optional[Dict[str, Any]] = None
