@@ -19,6 +19,8 @@ from app.core.account_manager import account_manager as acct_mgr
 
 router = APIRouter(prefix="/accounts", tags=["Telegram Accounts"])
 
+VALID_FEATURES = {"broadcast", "campaign", "finder", "scrape", "join", "ai_cs", "analytics", "crm", "cs"}
+
 
 def _require_owns(account: TelegramAccount, client: Client) -> None:
     if account.client_id != client.id and not client.is_admin:
@@ -139,6 +141,95 @@ async def health_check(
         "status": health.get("status"),
         "checked_at": health.get("checked_at"),
     }
+
+
+# ── Feature Assignment Endpoints ─────────────────────────────────────────────
+
+@router.get("/assignments/all", response_model=dict)
+async def get_all_assignments(
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get all feature assignments for the client's accounts."""
+    result = await db.execute(
+        select(TelegramAccount, AccountFeature)
+        .join(AccountFeature, AccountFeature.account_id == TelegramAccount.id, isouter=True)
+        .where(TelegramAccount.client_id == current_client.id)
+    )
+    assignments: dict = {f: [] for f in VALID_FEATURES}
+    for account, feature in result.all():
+        if feature and feature.feature in assignments:
+            assignments[feature.feature].append(account.name)
+    return assignments
+
+
+@router.get("/by-feature/{feature}", response_model=List[AccountResponse])
+async def get_accounts_by_feature(
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Get all accounts assigned to a specific feature."""
+    if feature not in VALID_FEATURES:
+        raise HTTPException(status_code=400, detail=f"Invalid feature. Valid: {sorted(VALID_FEATURES)}")
+    result = await db.execute(
+        select(TelegramAccount)
+        .join(AccountFeature, AccountFeature.account_id == TelegramAccount.id)
+        .where(TelegramAccount.client_id == current_client.id, AccountFeature.feature == feature)
+    )
+    return result.scalars().all()
+
+
+@router.post("/{account_id}/features/{feature}", response_model=MessageResponse)
+async def assign_feature(
+    account_id: int,
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Assign a feature to an account."""
+    if feature not in VALID_FEATURES:
+        raise HTTPException(status_code=400, detail=f"Invalid feature. Valid: {sorted(VALID_FEATURES)}")
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    existing = await db.execute(
+        select(AccountFeature).where(
+            AccountFeature.account_id == account_id,
+            AccountFeature.feature == feature
+        )
+    )
+    if not existing.scalar_one_or_none():
+        db.add(AccountFeature(account_id=account_id, feature=feature))
+    return MessageResponse(message=f"Feature '{feature}' assigned to account {account_id}")
+
+
+@router.delete("/{account_id}/features/{feature}", response_model=MessageResponse)
+async def remove_feature(
+    account_id: int,
+    feature: str,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """Remove a feature assignment from an account."""
+    if feature not in VALID_FEATURES:
+        raise HTTPException(status_code=400, detail=f"Invalid feature. Valid: {sorted(VALID_FEATURES)}")
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    await db.execute(
+        delete(AccountFeature).where(
+            AccountFeature.account_id == account_id,
+            AccountFeature.feature == feature
+        )
+    )
+    return MessageResponse(message=f"Feature '{feature}' removed from account {account_id}")
 
 
 # ── Telegram OTP Login (account onboarding) ───────────────────────────────────

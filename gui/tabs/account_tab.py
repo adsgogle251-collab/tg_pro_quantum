@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from core import log, account_manager, import_manager, statistics
 from core.account_router import account_router, Feature
+from core.state_manager import state_manager
+from core.localization import t
 from gui.styles import COLORS, FONTS
 
 # Timeout (seconds) waiting for the user to enter an OTP during bulk import
@@ -36,11 +38,11 @@ class AccountTab:
         header.pack(fill="x")
         header.pack_propagate(False)
         
-        tk.Label(header, text="📱 Account Management", 
+        tk.Label(header, text=f"📱 {t('Account Management')}", 
                  font=("Segoe UI", 18, "bold"), fg="#00d9ff", 
                  bg="#1a1a2e").pack(side="left", padx=20, pady=15)
         
-        tk.Button(header, text="📁 Manage Groups", command=self._manage_groups,
+        tk.Button(header, text=f"📁 {t('Manage Groups')}", command=self._manage_groups,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="right", padx=10, pady=10)
         
         # ═══════════════════════════════════════════════════
@@ -66,28 +68,28 @@ class AccountTab:
         toolbar = tk.Frame(self.scrollable_frame, bg="#16213e")
         toolbar.pack(fill="x", padx=10, pady=10)
         
-        tk.Button(toolbar, text="➕ Add Account", command=self._add_account,
+        tk.Button(toolbar, text=f"➕ {t('Add Account')}", command=self._add_account,
                   bg="#00ff00", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="🔐 Check Sessions", command=self._check_all_sessions,
+        tk.Button(toolbar, text=f"🔐 {t('Check Sessions')}", command=self._check_all_sessions,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="📥 Import", command=self._import_menu,
+        tk.Button(toolbar, text=f"📥 {t('Import')}", command=self._import_menu,
                   bg="#ffaa00", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="📤 Export", command=self._export_accounts,
+        tk.Button(toolbar, text=f"📤 {t('Export')}", command=self._export_accounts,
                   bg="#ff6b6b", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="🗑️ Delete Selected", command=self._delete_selected,
+        tk.Button(toolbar, text=f"🗑️ {t('Delete Selected')}", command=self._delete_selected,
                   bg="#ff0000", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="☑️ Select All", command=self._select_all,
+        tk.Button(toolbar, text=f"☑️ {t('Select All')}", command=self._select_all,
                   bg="#888888", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="☐ Deselect All", command=self._deselect_all,
+        tk.Button(toolbar, text=f"☐ {t('Deselect All')}", command=self._deselect_all,
                   bg="#888888", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
-        tk.Button(toolbar, text="🔄 Refresh", command=self._load_accounts,
+        tk.Button(toolbar, text=f"🔄 {t('Refresh')}", command=self._load_accounts,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
         # ═══════════════════════════════════════════════════
@@ -125,37 +127,40 @@ class AccountTab:
         # ═══════════════════════════════════════════════════
         # 3. ACCOUNT TABLE
         # ═══════════════════════════════════════════════════
-        table_frame = tk.LabelFrame(self.scrollable_frame, text="📋 Accounts List", 
+        table_frame = tk.LabelFrame(self.scrollable_frame, text=f"📋 {t('Accounts List')}", 
                                      bg="#0f3460", fg="#00d9ff",
                                      font=("Segoe UI", 11, "bold"))
         table_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        columns = ("✓", "Name", "Phone", "Level", "Session", "Status", "Group", "Success Rate")
+        columns = ("✓", "Nama", "Telepon", "Level", "Sesi", "Status", "Grup", "Fitur", "Tingkat")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12, selectmode="extended")
         
         self.tree.heading("✓", text="✓")
         self.tree.column("✓", width=40)
         
-        self.tree.heading("Name", text="Name")
-        self.tree.column("Name", width=120)
+        self.tree.heading("Nama", text=t("Account Name"))
+        self.tree.column("Nama", width=120)
         
-        self.tree.heading("Phone", text="Phone")
-        self.tree.column("Phone", width=120)
+        self.tree.heading("Telepon", text=t("Phone Number"))
+        self.tree.column("Telepon", width=120)
         
         self.tree.heading("Level", text="Level")
         self.tree.column("Level", width=60)
         
-        self.tree.heading("Session", text="Session")
-        self.tree.column("Session", width=80)
+        self.tree.heading("Sesi", text=t("Session"))
+        self.tree.column("Sesi", width=80)
         
-        self.tree.heading("Status", text="Status")
+        self.tree.heading("Status", text=t("Status"))
         self.tree.column("Status", width=100)
         
-        self.tree.heading("Group", text="Group")
-        self.tree.column("Group", width=120)
+        self.tree.heading("Grup", text=t("Group"))
+        self.tree.column("Grup", width=100)
         
-        self.tree.heading("Success Rate", text="Success Rate")
-        self.tree.column("Success Rate", width=100)
+        self.tree.heading("Fitur", text="Fitur")
+        self.tree.column("Fitur", width=160)
+        
+        self.tree.heading("Tingkat", text=t("Success Rate"))
+        self.tree.column("Tingkat", width=90)
         
         self.tree.pack(fill="both", expand=True, padx=10, pady=5)
         self.tree.bind("<Button-1>", self._on_tree_click)
@@ -190,28 +195,28 @@ class AccountTab:
         # ═══════════════════════════════════════════════════
         # 5. FEATURE ASSIGNMENT
         # ═══════════════════════════════════════════════════
-        feature_frame = tk.LabelFrame(self.scrollable_frame, text="⚡ Feature Assignment", 
+        feature_frame = tk.LabelFrame(self.scrollable_frame, text=f"⚡ {t('Feature Assignment')}", 
                                        bg="#0f3460", fg="#00d9ff",
                                        font=("Segoe UI", 11, "bold"))
         feature_frame.pack(fill="x", padx=10, pady=10)
         
-        tk.Label(feature_frame, text="Assign selected accounts to features:",
+        tk.Label(feature_frame, text=t("Assign selected accounts to features:"),
                 bg="#0f3460", fg="#ffffff").pack(pady=5)
         
         feature_btn_frame = tk.Frame(feature_frame, bg="#0f3460")
         feature_btn_frame.pack(pady=10)
         
-        tk.Button(feature_btn_frame, text="📢 Broadcast", command=self._bulk_assign_broadcast,
+        tk.Button(feature_btn_frame, text=f"📢 {t('Broadcast')}", command=self._bulk_assign_broadcast,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
-        tk.Button(feature_btn_frame, text="🔍 Finder", command=self._bulk_assign_finder,
+        tk.Button(feature_btn_frame, text=f"🔍 {t('Finder')}", command=self._bulk_assign_finder,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
-        tk.Button(feature_btn_frame, text="📥 Scrape", command=self._bulk_assign_scrape,
+        tk.Button(feature_btn_frame, text=f"📥 {t('Scrape')}", command=self._bulk_assign_scrape,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
-        tk.Button(feature_btn_frame, text="📤 Join", command=self._bulk_assign_join,
+        tk.Button(feature_btn_frame, text=f"📤 {t('Join')}", command=self._bulk_assign_join,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
-        tk.Button(feature_btn_frame, text="💬 CS", command=self._bulk_assign_cs,
+        tk.Button(feature_btn_frame, text=f"💬 {t('AI CS')}", command=self._bulk_assign_cs,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
-        tk.Button(feature_btn_frame, text="❌ Unassign All", command=self._bulk_unassign,
+        tk.Button(feature_btn_frame, text=f"❌ {t('Unassign All')}", command=self._bulk_unassign,
                   bg="#ff6b6b", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
         
         self.feature_count_label = tk.Label(feature_frame, text="Selected: 0", 
@@ -373,6 +378,10 @@ class AccountTab:
             # Session status
             session_status = "✅" if acc.get("session_valid", False) else "❌"
             
+            # Features assigned
+            features = account_manager.get_account_features(acc.get("name", ""))
+            features_display = ", ".join(features) if features else "-"
+            
             self.tree.insert("", "end", values=(
                 "☐", 
                 acc.get("name", ""), 
@@ -381,6 +390,7 @@ class AccountTab:
                 session_status,
                 acc.get('status', 'active'),
                 acc.get('group', '-'),
+                features_display,
                 f"{acc.get('success_rate', 100):.1f}%"
             ))
         
@@ -855,7 +865,7 @@ class AccountTab:
     
     def _bulk_assign_broadcast(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning(t("Warning"), t("Select accounts first!") if "Select accounts first!" in t.__doc__ or True else "Pilih akun terlebih dahulu!")
             return
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "broadcast")
@@ -865,7 +875,7 @@ class AccountTab:
 
     def _bulk_assign_finder(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "finder")
@@ -875,7 +885,7 @@ class AccountTab:
 
     def _bulk_assign_scrape(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "scrape")
@@ -885,7 +895,7 @@ class AccountTab:
 
     def _bulk_assign_join(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "join")
@@ -895,7 +905,7 @@ class AccountTab:
 
     def _bulk_assign_cs(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
         for name in self.selected_accounts:
             account_manager.assign_feature(name, "cs")
@@ -905,9 +915,9 @@ class AccountTab:
 
     def _bulk_unassign(self):
         if not self.selected_accounts:
-            messagebox.showwarning("Warning", "Select accounts first!")
+            messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
-        if messagebox.askyesno("Confirm", f"Remove all feature assignments from {len(self.selected_accounts)} accounts?"):
+        if messagebox.askyesno("Konfirmasi", f"Lepas semua penetapan fitur dari {len(self.selected_accounts)} akun?"):
             for name in self.selected_accounts:
                 acc = account_manager.get(name)
                 if acc:
@@ -1072,12 +1082,14 @@ class AccountTab:
                   bg="#00ff00", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="right", padx=5)
     
     def _sync_groups_to_broadcast(self):
+        # Emit state change to sync all tabs (broadcast_tab listens via state_manager)
+        state_manager.emit_state_change("account_assigned", {"feature": "groups_updated"})
         if hasattr(self.main_window, 'broadcast_tab'):
             try:
                 self.main_window.broadcast_tab._load_broadcast_groups()
-                log("Groups synced to Broadcast tab", "success")
+                log("Grup disinkronkan ke tab Siaran", "success")
             except Exception as e:
-                log(f"Failed to sync groups: {e}", "error")
+                log(f"Gagal sinkronisasi grup: {e}", "error")
     
     def _refresh(self):
         self._load_accounts()

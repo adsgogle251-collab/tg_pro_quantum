@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, colorchooser, filedialog
 from core import log, config_manager
 from core.whitelabel_manager import whitelabel_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class WhiteLabelTab:
     title = "🎨 White-Label"
@@ -17,7 +18,7 @@ class WhiteLabelTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="🎨 White-Label Branding", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"🎨 {t('White-Label Branding')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

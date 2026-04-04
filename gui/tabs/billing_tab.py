@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from core.billing_engine import billing_engine, SubscriptionTier, PRICING
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class BillingTab:
     title = "💳 Billing"
@@ -16,7 +17,7 @@ class BillingTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="💳 Billing & Subscriptions", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"💳 {t('Billing & Subscriptions')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

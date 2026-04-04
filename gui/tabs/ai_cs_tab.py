@@ -4,9 +4,10 @@ from tkinter import ttk, messagebox, scrolledtext, filedialog
 from core import log, ai_cs_engine, account_manager, config_manager
 from core.account_router import account_router, Feature
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class AICSTab:
-    title = "💬 AI CS"
+    title = "💬 AI Layanan"
     
     def __init__(self, parent, main_window=None):
         self.parent = parent
@@ -18,7 +19,7 @@ class AICSTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="💬 AI Customer Service", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"💬 {t('AI Customer Service')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # Main scrollable container

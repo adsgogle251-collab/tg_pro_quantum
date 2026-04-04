@@ -16,6 +16,8 @@ class AccountStatus(Enum):
     SESSION_EXPIRED = "session_expired"
 
 class AccountManager:
+    SUPPORTED_FEATURES = ["broadcast", "campaign", "finder", "scrape", "join", "ai_cs", "analytics", "crm", "cs"]
+
     def __init__(self):
         self.accounts_file = ACCOUNTS_FILE
         self.groups_file = GROUPS_FILE

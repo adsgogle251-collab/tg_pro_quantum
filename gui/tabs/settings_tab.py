@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 from core import log, log_error, config_manager, backup_manager
 from core.auto_backup import auto_backup
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class SettingsTab:
     title = "⚙️ Settings"
@@ -21,7 +22,7 @@ class SettingsTab:
         header_frame.pack(fill="x")
         header_frame.pack_propagate(False)
         
-        tk.Label(header_frame, text="⚙️ Settings & Configuration", 
+        tk.Label(header_frame, text=f"⚙️ {t('Settings & Configuration')}", 
                  font=("Segoe UI", 20, "bold"), fg=COLORS["primary"], 
                  bg=COLORS["bg_dark"]).pack(side="left", padx=20, pady=15)
         
@@ -139,7 +140,7 @@ class SettingsTab:
         btn_frame = tk.Frame(self.scrollable_frame, bg=COLORS["bg_dark"])
         btn_frame.pack(fill="x", padx=10, pady=20)
         
-        tk.Button(btn_frame, text="💾 Save All Settings", command=self._save_all_settings,
+        tk.Button(btn_frame, text=f"💾 {t('Save All Settings')}", command=self._save_all_settings,
                   bg=COLORS["success"], fg="white", font=("Segoe UI", 14, "bold"),
                   padx=40, pady=15).pack(side="left", padx=10)
         

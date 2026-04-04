@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from core import log
 from core.gdpr_compliance import gdpr_compliance
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class GDPRTab:
     title = "📋 GDPR"
@@ -17,7 +18,7 @@ class GDPRTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📋 GDPR Compliance", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"📋 {t('GDPR Compliance')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

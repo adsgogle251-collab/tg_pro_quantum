@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog, simpledialog, scrolledtext
 from core import log, config_manager, backup_manager, statistics
 from core import report_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class ToolsTab:
     title = "🛠️ Tools"
@@ -16,7 +17,7 @@ class ToolsTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="🛠️ Tools & Utilities", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"🛠️ {t('Tools & Utilities')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===
