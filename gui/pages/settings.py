@@ -7,7 +7,7 @@ proxy, and advanced settings.
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk, colorchooser
+from tkinter import ttk
 from typing import Callable, Optional, Dict, Any
 
 from gui.styles import COLORS, FONTS

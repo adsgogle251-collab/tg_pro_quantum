@@ -24,8 +24,8 @@ CYAN  = COLORS["primary"]
 GREEN = COLORS["success"]
 TEXT  = COLORS["text"]
 MUTED = COLORS["text_muted"]
-ORANGE = COLORS.get("accent", COLORS["warning"])
-PURPLE = COLORS.get("secondary", "#7B2CBF")
+ORANGE = COLORS["accent"]
+PURPLE = COLORS["secondary"]
 
 
 class AnalyticsPage:

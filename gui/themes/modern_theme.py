@@ -16,7 +16,8 @@ from gui.themes.colors import (
 
 __all__ = [
     "setup_modern_theme",
-    "PRIMARY", "SECONDARY", "ACCENT", "SUCCESS", "ERROR", "WARNING",
+    "PRIMARY", "PRIMARY_HOVER",
+    "SECONDARY", "ACCENT", "SUCCESS", "ERROR", "WARNING",
     "BG_DARK", "BG_MEDIUM", "BG_LIGHT", "TEXT", "TEXT_MUTED",
     "BORDER", "BORDER_FOCUS", "COLORS",
 ]
