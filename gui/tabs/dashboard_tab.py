@@ -3,10 +3,12 @@ import tkinter as tk
 from tkinter import ttk
 from core import statistics, health_checker, account_manager, load_groups, campaign_manager
 from core.account_router import account_router, Feature
+from core.state_manager import state_manager
+from core.localization import t
 from gui.styles import COLORS, FONTS
 
 class DashboardTab:
-    title = "📊 Dashboard"
+    title = "📊 Dasbor"
     
     def __init__(self, parent, main_window=None):
         self.parent = parent
@@ -14,10 +16,21 @@ class DashboardTab:
         self.frame = ttk.Frame(parent)
         self._create_widgets()
         self._start_realtime_updates()
+        
+        # Listen for state changes
+        state_manager.on_state_change("account_assigned", self._on_state_change)
+        state_manager.on_state_change("refresh_all", self._on_state_change)
+    
+    def _on_state_change(self, data=None):
+        """Refresh dashboard when accounts change"""
+        try:
+            self._update_all_stats()
+        except Exception:
+            pass
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📊 Real-Time Dashboard", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"📊 {t('Real-Time Dashboard')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===
@@ -39,18 +52,18 @@ class DashboardTab:
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
         # === STATUS DASHBOARD ===
-        status_frame = tk.LabelFrame(self.scrollable_frame, text="🎯 System Readiness",
+        status_frame = tk.LabelFrame(self.scrollable_frame, text=f"🎯 {t('System Readiness')}",
                                       fg=COLORS["accent"], bg=COLORS["bg_medium"],
                                       font=FONTS["heading"])
         status_frame.pack(fill="x", padx=10, pady=10)
         
         self.status_items = {}
         status_checks = [
-            ("📱 Accounts", self._check_accounts, COLORS["success"]),
-            ("📁 Account Groups", self._check_groups, COLORS["success"]),
-            ("🎯 Joined Groups", self._check_joined, COLORS["success"]),
-            ("📈 Campaigns", self._check_campaigns, COLORS["success"]),
-            ("🔐 License", self._check_license, COLORS["success"]),
+            (f"📱 {t('Accounts')}", self._check_accounts, COLORS["success"]),
+            ("📁 Grup Akun", self._check_groups, COLORS["success"]),
+            ("🎯 Grup Bergabung", self._check_joined, COLORS["success"]),
+            (f"📈 {t('Campaign')}", self._check_campaigns, COLORS["success"]),
+            ("🔐 Lisensi", self._check_license, COLORS["success"]),
             ("🔌 Telegram API", self._check_api, COLORS["info"]),
         ]
         
@@ -72,7 +85,7 @@ class DashboardTab:
             self.status_items[label] = {"icon": status_icon, "check": check_func, "color": color}
         
         # Quick Start Button
-        tk.Button(status_frame, text="🚀 Setup Guide", command=self._show_setup_wizard,
+        tk.Button(status_frame, text=f"🚀 {t('Setup Guide')}", command=self._show_setup_wizard,
                   bg=COLORS["info"], fg="white", font=FONTS["bold"],
                   padx=20, pady=8).pack(pady=10)
         
@@ -81,10 +94,10 @@ class DashboardTab:
         stats_frame.pack(fill="x", padx=10, pady=10)
         
         cards = [
-            ("📱 Total Accounts", "accounts_var", COLORS["info"]),
-            ("📢 Active Broadcasts", "broadcasts_var", COLORS["success"]),
-            ("✅ Messages Sent", "sent_var", COLORS["accent"]),
-            ("📈 Success Rate", "rate_var", COLORS["warning"]),
+            (f"📱 {t('Total Accounts')}", "accounts_var", COLORS["info"]),
+            (f"📢 {t('Active Broadcasts')}", "broadcasts_var", COLORS["success"]),
+            (f"✅ {t('Messages Sent')}", "sent_var", COLORS["accent"]),
+            (f"📈 {t('Success Rate')}", "rate_var", COLORS["warning"]),
             ("🔍 Groups Found", "groups_var", COLORS["info"]),
             ("📥 Members Scraped", "scraped_var", COLORS["success"]),
         ]
@@ -264,14 +277,18 @@ class DashboardTab:
             # Get groups
             groups = load_groups()
             
-            # Get feature assignments
+            # Get feature assignments (using account_manager.get_accounts_by_feature for accuracy)
             feature_counts = {"broadcast": 0, "finder": 0, "scrape": 0, "join": 0, "cs": 0}
             try:
-                assignments = account_router.get_assignments()
-                for assignment in assignments:
-                    feature_counts[assignment.feature.value] = feature_counts.get(assignment.feature.value, 0) + 1
-            except:
-                pass
+                for feature in feature_counts:
+                    feature_counts[feature] = len(account_manager.get_accounts_by_feature(feature))
+            except Exception:
+                try:
+                    assignments = account_router.get_assignments()
+                    for assignment in assignments:
+                        feature_counts[assignment.feature.value] = feature_counts.get(assignment.feature.value, 0) + 1
+                except Exception:
+                    pass
             
             # Update top cards
             self.stat_vars["accounts_var"].set(str(total_accounts))

@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from core import statistics, account_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class AnalyticsTab:
     title = "📊 Analytics"
@@ -15,7 +16,7 @@ class AnalyticsTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📊 Analytics Dashboard", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"📊 {t('Analytics Dashboard')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

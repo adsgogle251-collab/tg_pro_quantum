@@ -15,7 +15,9 @@ from core.engine import broadcast_engine, init_engines
 from core import notification_manager
 from core import auto_backup
 from core import scheduler_24h
-from gui.styles import COLORS, FONTS
+from core.state_manager import state_manager
+from core.localization import t
+from gui.styles import COLORS, FONTS, setup_theme
 
 # Import Login System
 from gui.tabs.login_tab import LoginDialog, get_current_user, set_current_user
@@ -119,28 +121,28 @@ class MainWindow:
         
         # All tabs (22 total)
         buttons = [
-            ("📊 Dashboard", 0),
-            ("📈 Campaigns", 1),
-            ("📢 Broadcast", 2),
-            ("📱 Accounts", 3),
-            ("📈 Campaign", 4),
-            ("🔍 Finder", 5),
-            ("📥 Scrape", 6),
-            ("📤 Join", 7),
-            ("💬 AI CS", 8),
-            ("📊 Analytics", 9),
+            ("📊 Dasbor", 0),
+            ("📈 Kamp. Dashboard", 1),
+            ("📢 Siaran", 2),
+            ("📱 Akun", 3),
+            ("📈 Kampanye", 4),
+            ("🔍 Pencari", 5),
+            ("📥 Ambil Data", 6),
+            ("📤 Bergabung", 7),
+            ("💬 AI Layanan", 8),
+            ("📊 Analitik", 9),
             ("🤝 CRM", 10),
-            ("💳 Billing", 11),
-            ("🔒 Security", 12),
-            ("👥 Users", 13),
-            ("🎨 WhiteLabel", 14),
+            ("💳 Tagihan", 11),
+            ("🔒 Keamanan", 12),
+            ("👥 Pengguna", 13),
+            ("🎨 Label Putih", 14),
             ("📋 GDPR", 15),
-            ("⚙️ Settings", 16),
-            ("📝 LOG", 17),
-            ("🛠️ Tools", 18),
-            ("👥 Clients", 19),
+            ("⚙️ Pengaturan", 16),
+            ("📝 Log", 17),
+            ("🛠️ Alat", 18),
+            ("👥 Klien", 19),
             ("👤 Portal", 20),
-            ("❓ Help", 21),
+            ("❓ Bantuan", 21),
         ]
         
         self.nav_buttons = []
@@ -171,7 +173,7 @@ class MainWindow:
                                               font=("Segoe UI", 12))
         self.connection_indicator.pack(side="left", padx=15, pady=10)
         
-        self.connection_label = tk.Label(status_frame, text="Connected",
+        self.connection_label = tk.Label(status_frame, text="Terhubung",
                                           fg="#888888", bg="#1a1a2e",
                                           font=("Segoe UI", 9))
         self.connection_label.pack(side="left")
@@ -229,13 +231,13 @@ class MainWindow:
         statusbar = tk.Frame(self.root, bg="#0f3460", height=30)
         statusbar.pack(side="bottom", fill="x")
         
-        self.status_label = tk.Label(statusbar, text="Ready", 
+        self.status_label = tk.Label(statusbar, text="Siap", 
                                       bg="#0f3460", fg="#888888", 
                                       anchor="w", padx=15,
                                       font=("Segoe UI", 9))
         self.status_label.pack(side="left", fill="x", expand=True)
         
-        self.stats_label = tk.Label(statusbar, text="Broadcasts: 0 | Success: 0%",
+        self.stats_label = tk.Label(statusbar, text="Siaran: 0 | Berhasil: 0%",
                                      bg="#0f3460", fg="#00d9ff", 
                                      padx=15,
                                      font=("Segoe UI", 9))

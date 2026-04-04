@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from core import help_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class HelpTab:
     title = "❓ Help"
@@ -15,7 +16,7 @@ class HelpTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="❓ Help & Documentation", 
+        tk.Label(self.frame, text=f"❓ {t('Help & Documentation')}", 
                  font=("Segoe UI", 24, "bold"), fg=COLORS["primary"], 
                  bg=COLORS["bg_dark"]).pack(pady=15)
         

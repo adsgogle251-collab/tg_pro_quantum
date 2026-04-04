@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from core.crm_engine import crm_engine
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class CRMTab:
     title = "🤝 CRM"
@@ -16,7 +17,7 @@ class CRMTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="🤝 Customer Relationship Management", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"🤝 {t('Customer Relationship Management')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

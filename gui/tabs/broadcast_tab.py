@@ -8,10 +8,12 @@ from datetime import datetime
 from core import log, load_message, save_message, load_groups, statistics, campaign_manager, account_manager
 from core.engine import broadcast_engine
 from core import broadcast_history
+from core.state_manager import state_manager
+from core.localization import t
 from gui.styles import COLORS, FONTS
 
 class BroadcastTab:
-    title = "📢 Broadcast"
+    title = "📢 Siaran"
     
     def __init__(self, parent, main_window=None):
         self.parent = parent
@@ -26,6 +28,25 @@ class BroadcastTab:
         self._load_message()
         self._load_broadcast_groups()
         self._load_campaigns()
+        
+        # Listen for account assignment changes to refresh groups
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
+        state_manager.on_state_change("refresh_all", self._on_refresh_all)
+    
+    def _on_account_changed(self, data=None):
+        """Called when account assignments change"""
+        try:
+            self._load_broadcast_groups()
+        except Exception:
+            pass
+    
+    def _on_refresh_all(self, data=None):
+        """Called on global refresh"""
+        try:
+            self._load_broadcast_groups()
+            self._load_campaigns()
+        except Exception:
+            pass
     
     def _create_widgets(self):
         # ═══════════════════════════════════════════════════
@@ -37,13 +58,13 @@ class BroadcastTab:
         # ───────────────────────────────────────────────────
         # LEFT: Campaign & Message
         # ───────────────────────────────────────────────────
-        left_frame = tk.LabelFrame(top_frame, text="📝 Message", 
+        left_frame = tk.LabelFrame(top_frame, text=f"📝 {t('Message')}", 
                                     bg="#0f3460", fg="#00d9ff",
                                     font=("Segoe UI", 12, "bold"))
         left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
         
         # Campaign
-        tk.Label(left_frame, text="Campaign:", bg="#0f3460", fg="#ffffff").pack(anchor="w", padx=10, pady=5)
+        tk.Label(left_frame, text=f"{t('Campaign')}:", bg="#0f3460", fg="#ffffff").pack(anchor="w", padx=10, pady=5)
         self.campaign_var = tk.StringVar(value="")
         self.campaign_combo = ttk.Combobox(left_frame, textvariable=self.campaign_var, width=40)
         self.campaign_combo.pack(fill="x", padx=10, pady=5)
@@ -56,35 +77,35 @@ class BroadcastTab:
         # Save/Load buttons
         btn_fr = tk.Frame(left_frame, bg="#0f3460")
         btn_fr.pack(pady=5)
-        tk.Button(btn_fr, text="💾 Save", command=self._save_message, bg="#00d9ff", fg="#000000", width=15).pack(side="left", padx=5)
-        tk.Button(btn_fr, text="📂 Load", command=self._load_message, bg="#ff6b6b", fg="#ffffff", width=15).pack(side="left", padx=5)
+        tk.Button(btn_fr, text=f"💾 {t('Save')}", command=self._save_message, bg="#00d9ff", fg="#000000", width=15).pack(side="left", padx=5)
+        tk.Button(btn_fr, text=f"📂 {t('Load')}", command=self._load_message, bg="#ff6b6b", fg="#ffffff", width=15).pack(side="left", padx=5)
         
         # ───────────────────────────────────────────────────
         # RIGHT: Settings (Account Group, Target, Delay)
         # ───────────────────────────────────────────────────
-        right_frame = tk.LabelFrame(top_frame, text="⚙️ Settings", 
+        right_frame = tk.LabelFrame(top_frame, text=f"⚙️ {t('Settings')}", 
                                      bg="#0f3460", fg="#00d9ff",
                                      font=("Segoe UI", 12, "bold"))
         right_frame.pack(side="right", fill="y", padx=(5, 0))
         
         # Account Group
-        tk.Label(right_frame, text="📱 Account Group:", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
-        self.group_var = tk.StringVar(value="All Accounts")
+        tk.Label(right_frame, text=f"📱 {t('Account Group')}:", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
+        self.group_var = tk.StringVar(value=t("All Accounts"))
         self.group_combo = ttk.Combobox(right_frame, textvariable=self.group_var, width=25)
         self.group_combo.pack(padx=10, pady=5)
         self.group_combo.bind("<<ComboboxSelected>>", lambda e: self._on_group_select())
         
-        self.acc_count_lbl = tk.Label(right_frame, text="0 accounts", bg="#0f3460", fg="#888888")
+        self.acc_count_lbl = tk.Label(right_frame, text="0 akun", bg="#0f3460", fg="#888888")
         self.acc_count_lbl.pack(pady=5)
         
         # Target Groups
-        tk.Label(right_frame, text="🎯 Target Groups:", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
+        tk.Label(right_frame, text=f"🎯 {t('Target Groups')}:", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
         self.mode_var = tk.StringVar(value="joined")
-        tk.Radiobutton(right_frame, text="Joined Groups", variable=self.mode_var, value="joined", bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=20, pady=2)
-        tk.Radiobutton(right_frame, text="Custom List", variable=self.mode_var, value="custom", bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=20, pady=2)
+        tk.Radiobutton(right_frame, text=t("Joined Groups"), variable=self.mode_var, value="joined", bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=20, pady=2)
+        tk.Radiobutton(right_frame, text=t("Custom List"), variable=self.mode_var, value="custom", bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=20, pady=2)
         
         # Delay
-        tk.Label(right_frame, text="⏱️ Delay (seconds):", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
+        tk.Label(right_frame, text=f"⏱️ {t('Delay (seconds)')}:", bg="#0f3460", fg="#ffffff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(10,5))
         delay_fr = tk.Frame(right_frame, bg="#0f3460")
         delay_fr.pack(padx=10, pady=5)
         self.delay_min = tk.Entry(delay_fr, width=5, bg="#1a1a2e", fg="#ffffff")
@@ -97,12 +118,12 @@ class BroadcastTab:
         
         # Round Robin
         self.round_robin_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(right_frame, text="🔄 Round-Robin", variable=self.round_robin_var, bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=10, pady=5)
+        tk.Checkbutton(right_frame, text=f"🔄 {t('Round-Robin')}", variable=self.round_robin_var, bg="#0f3460", fg="#ffffff", selectcolor="#00d9ff").pack(anchor="w", padx=10, pady=5)
         
         # ═══════════════════════════════════════════════════
         # MIDDLE: Progress Detail
         # ═══════════════════════════════════════════════════
-        mid_frame = tk.LabelFrame(self.frame, text="📊 Live Progress", 
+        mid_frame = tk.LabelFrame(self.frame, text="📊 Progress Langsung", 
                                    bg="#0f3460", fg="#00d9ff",
                                    font=("Segoe UI", 12, "bold"))
         mid_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -206,7 +227,12 @@ class BroadcastTab:
     def _load_broadcast_groups(self):
         try:
             groups = account_manager.load_groups()
-            group_list = ["All Accounts"] + list(groups.keys())
+            # Also add a "Broadcast Accounts" entry for feature-assigned accounts
+            broadcast_accounts = account_manager.get_accounts_by_feature("broadcast")
+            group_list = [t("All Accounts")]
+            if broadcast_accounts:
+                group_list.append("📢 Akun Siaran")
+            group_list += list(groups.keys())
             self.group_combo['values'] = group_list
             self._on_group_select()
         except Exception as e:
@@ -215,13 +241,15 @@ class BroadcastTab:
     def _on_group_select(self, e=None):
         grp = self.group_var.get()
         try:
-            if grp == "All Accounts":
+            if grp == t("All Accounts") or grp == "All Accounts":
                 cnt = len(account_manager.get_all())
+            elif grp == "📢 Akun Siaran":
+                cnt = len(account_manager.get_accounts_by_feature("broadcast"))
             else:
                 cnt = len(account_manager.get_group_accounts(grp))
-            self.acc_count_lbl.config(text=f"{cnt} accounts" + (" ✅" if cnt > 0 else " ⚠️"))
+            self.acc_count_lbl.config(text=f"{cnt} akun" + (" ✅" if cnt > 0 else " ⚠️"))
         except:
-            self.acc_count_lbl.config(text="0 accounts ⚠️")
+            self.acc_count_lbl.config(text="0 akun ⚠️")
     
     def _load_message(self):
         try:
@@ -282,8 +310,10 @@ class BroadcastTab:
             return
         
         grp = self.group_var.get()
-        if grp == "All Accounts":
+        if grp == t("All Accounts") or grp == "All Accounts":
             accs = [a['name'] for a in account_manager.get_all()]
+        elif grp == "📢 Akun Siaran":
+            accs = [a['name'] for a in account_manager.get_accounts_by_feature("broadcast")]
         else:
             accs = account_manager.get_group_accounts(grp)
         

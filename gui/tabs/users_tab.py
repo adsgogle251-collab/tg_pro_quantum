@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, simpledialog
 from core import log
 from core.user_manager import user_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class UsersTab:
     title = "👥 Users"
@@ -17,7 +18,7 @@ class UsersTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="👥 User Management", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"👥 {t('User Management')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from core import log
 from core.broadcast_history import broadcast_history
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class LogTab:
     title = "📝 LOG"
@@ -16,7 +17,7 @@ class LogTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📝 System Logs & Broadcast History", 
+        tk.Label(self.frame, text=f"📝 {t('System Logs & Broadcast History')}", 
                  font=("Segoe UI", 24, "bold"), fg=COLORS["primary"], 
                  bg=COLORS["bg_dark"]).pack(pady=15)
         

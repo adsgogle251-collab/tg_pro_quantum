@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from core import security_ultimate
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class SecurityTab:
     title = "🔒 Security"
@@ -16,7 +17,7 @@ class SecurityTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="🔒 Security Settings", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"🔒 {t('Security Settings')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

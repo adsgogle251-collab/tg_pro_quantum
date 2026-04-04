@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, scrolledtext
 from core import log, client_manager, account_manager
 from gui.styles import COLORS, FONTS
+from core.localization import t
 
 class ClientsTab:
     title = "👥 Clients"
@@ -16,7 +17,7 @@ class ClientsTab:
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="👥 Client Management", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"👥 {t('Client Management')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===

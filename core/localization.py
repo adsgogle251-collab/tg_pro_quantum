@@ -154,6 +154,20 @@ TRANSLATIONS: Dict[str, str] = {
     "Session valid": "Sesi valid",
     "Session expired": "Sesi kedaluwarsa",
 
+    # Tab Headers
+    "AI Customer Service": "AI Layanan Pelanggan",
+    "Analytics Dashboard": "Dasbor Analitik",
+    "Billing & Subscriptions": "Tagihan & Langganan",
+    "Customer Relationship Management": "Manajemen Hubungan Pelanggan",
+    "GDPR Compliance": "Kepatuhan GDPR",
+    "Security Settings": "Pengaturan Keamanan",
+    "User Management": "Manajemen Pengguna",
+    "White-Label Branding": "Branding Label Putih",
+    "Tools & Utilities": "Alat & Utilitas",
+    "Help & Documentation": "Bantuan & Dokumentasi",
+    "System Logs & Broadcast History": "Log Sistem & Riwayat Siaran",
+    "Client Management": "Manajemen Klien",
+
     # Settings
     "Telegram API": "Telegram API",
     "API ID": "API ID",
