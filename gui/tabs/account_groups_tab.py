@@ -181,6 +181,8 @@ class AccountGroupsTab:
         self.stat_healthy = self._make_stat_label(stats_row, "Healthy", "0", COLORS["success"])
         self.stat_warning = self._make_stat_label(stats_row, "Warning", "0", COLORS["warning"])
         self.stat_banned = self._make_stat_label(stats_row, "Banned", "0", COLORS["error"])
+        self.stat_msgs = self._make_stat_label(stats_row, "Msgs Sent", "0", COLORS["primary"])
+        self.stat_rate = self._make_stat_label(stats_row, "Success%", "0%", COLORS["success"])
 
         # Account treeview
         tree_frame = tk.Frame(self.detail_content, bg=bg)
@@ -295,8 +297,9 @@ class AccountGroupsTab:
 
         feature_label = FEATURE_LABELS.get(group.get("feature_type", "general"), "General")
         self.detail_name_lbl.config(text=f"📂 {group['name']}")
+        client_info = f" | Client: {group.get('client_id','—')}" if group.get("client_id") else ""
         self.detail_meta_lbl.config(
-            text=f"{feature_label} | Status: {group.get('status','active')} | ID: {group['id']}"
+            text=f"{feature_label} | Status: {group.get('status','active')} | ID: {group['id']}{client_info}"
         )
 
         # Populate edit fields
@@ -310,6 +313,14 @@ class AccountGroupsTab:
         self.stat_healthy.config(text=str(health.get("healthy", 0)))
         self.stat_warning.config(text=str(health.get("warning", 0)))
         self.stat_banned.config(text=str(health.get("banned", 0)))
+
+        # Analytics stats
+        analytics = group.get("analytics", {})
+        msgs = analytics.get("messages_sent", 0)
+        rate = analytics.get("success_rate", 0.0)
+        if hasattr(self, "stat_msgs"):
+            self.stat_msgs.config(text=f"{msgs:,}")
+            self.stat_rate.config(text=f"{rate:.1f}%")
 
         self._load_group_accounts()
 
@@ -335,36 +346,109 @@ class AccountGroupsTab:
     # ─────────────────────────────────────────────────────────────────
 
     def _create_group(self):
-        name = simpledialog.askstring("New Group", "Enter group name:", parent=self.frame)
-        if not name or not name.strip():
-            return
-
-        # Ask for feature type
         win = tk.Toplevel(self.frame)
-        win.title("Select Feature Type")
+        win.title("➕ Create Account Group")
         win.configure(bg=COLORS["bg_dark"])
-        win.geometry("320x200")
+        win.geometry("420x520")
         win.resizable(False, False)
 
-        tk.Label(win, text="Feature Type:", font=FONTS["normal"],
-                 fg=COLORS["text"], bg=COLORS["bg_dark"]).pack(pady=10)
+        tk.Label(win, text="➕ Create Account Group", font=FONTS["heading"],
+                 fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
 
+        form = tk.Frame(win, bg=COLORS["bg_medium"])
+        form.pack(fill="both", expand=True, padx=15, pady=5)
+
+        # Group Name
+        r = 0
+        tk.Label(form, text="Group Name: *", fg=COLORS["text"], bg=COLORS["bg_medium"],
+                 font=FONTS["normal"]).grid(row=r, column=0, padx=10, pady=8, sticky="w")
+        name_entry = tk.Entry(form, width=30, bg=COLORS["bg_light"], fg=COLORS["text"],
+                              insertbackground=COLORS["primary"])
+        name_entry.grid(row=r, column=1, padx=10, pady=8)
+
+        # Feature Type
+        r += 1
+        tk.Label(form, text="Feature Type:", fg=COLORS["text"], bg=COLORS["bg_medium"],
+                 font=FONTS["normal"]).grid(row=r, column=0, padx=10, pady=8, sticky="w")
         feature_var = tk.StringVar(value="📁 General")
         feature_vals = [FEATURE_LABELS.get(f, f) for f in FEATURE_TYPES]
-        ttk.Combobox(win, textvariable=feature_var, values=feature_vals,
-                     width=28, state="readonly").pack(pady=5)
+        ttk.Combobox(form, textvariable=feature_var, values=feature_vals,
+                     width=28, state="readonly").grid(row=r, column=1, padx=10, pady=8)
+
+        # Assign to Client
+        r += 1
+        tk.Label(form, text="Assign to Client:", fg=COLORS["text"], bg=COLORS["bg_medium"],
+                 font=FONTS["normal"]).grid(row=r, column=0, padx=10, pady=8, sticky="w")
+        from core.clients import client_manager
+        all_clients = client_manager.get_all_clients()
+        client_options = ["(None)"] + [f"{c['name']} [{c['id']}]" for c in all_clients]
+        client_ids_map = {f"{c['name']} [{c['id']}]": c["id"] for c in all_clients}
+        client_var = tk.StringVar(value="(None)")
+        ttk.Combobox(form, textvariable=client_var, values=client_options,
+                     width=28, state="readonly").grid(row=r, column=1, padx=10, pady=8)
+
+        # Config options
+        r += 1
+        config_lf = tk.LabelFrame(form, text="⚙️ Config", fg=COLORS["accent"],
+                                   bg=COLORS["bg_medium"], font=FONTS["small"])
+        config_lf.grid(row=r, column=0, columnspan=2, padx=10, pady=8, sticky="ew")
+
+        auto_warm_var = tk.BooleanVar()
+        auto_rotate_var = tk.BooleanVar(value=True)
+        health_monitor_var = tk.BooleanVar(value=True)
+
+        tk.Checkbutton(config_lf, text="🔥 Auto-warming enabled",
+                       variable=auto_warm_var, fg=COLORS["text"],
+                       bg=COLORS["bg_medium"], selectcolor=COLORS["bg_light"],
+                       activebackground=COLORS["bg_medium"]).pack(anchor="w", padx=10, pady=3)
+        tk.Checkbutton(config_lf, text="🔄 Auto-rotate accounts",
+                       variable=auto_rotate_var, fg=COLORS["text"],
+                       bg=COLORS["bg_medium"], selectcolor=COLORS["bg_light"],
+                       activebackground=COLORS["bg_medium"]).pack(anchor="w", padx=10, pady=3)
+        tk.Checkbutton(config_lf, text="💊 Health monitoring enabled",
+                       variable=health_monitor_var, fg=COLORS["text"],
+                       bg=COLORS["bg_medium"], selectcolor=COLORS["bg_light"],
+                       activebackground=COLORS["bg_medium"]).pack(anchor="w", padx=10, pady=3)
+
+        delay_row = tk.Frame(config_lf, bg=COLORS["bg_medium"])
+        delay_row.pack(anchor="w", padx=10, pady=3)
+        tk.Label(delay_row, text="Delay (sec):", fg=COLORS["text"],
+                 bg=COLORS["bg_medium"], font=FONTS["small"]).pack(side="left")
+        delay_var = tk.StringVar(value="30")
+        tk.Entry(delay_row, textvariable=delay_var, width=8,
+                 bg=COLORS["bg_light"], fg=COLORS["text"]).pack(side="left", padx=5)
+
+        # Buttons
+        btn_row = tk.Frame(win, bg=COLORS["bg_dark"])
+        btn_row.pack(pady=15)
 
         def confirm():
+            name = name_entry.get().strip()
+            if not name:
+                messagebox.showerror("Error", "Group name is required.", parent=win)
+                return
             reverse_map = {v: k for k, v in FEATURE_LABELS.items()}
             ftype = reverse_map.get(feature_var.get(), "general")
-            gid = account_group_manager.create_group(name.strip(), feature_type=ftype)
+            client_sel = client_var.get()
+            client_id = client_ids_map.get(client_sel) if client_sel != "(None)" else None
+            config = {
+                "auto_warming": auto_warm_var.get(),
+                "auto_rotate": auto_rotate_var.get(),
+                "health_monitoring": health_monitor_var.get(),
+                "delay_sec": int(delay_var.get()) if delay_var.get().isdigit() else 30,
+            }
+            gid = account_group_manager.create_group(name, feature_type=ftype,
+                                                      client_id=client_id, config=config)
             log(f"Created group '{name}' ({gid})", "success")
             win.destroy()
             self._load_groups()
 
-        tk.Button(win, text="✅ Create", bg=COLORS["success"], fg="#000",
-                  font=FONTS["bold"], bd=0, padx=15, pady=8,
-                  command=confirm).pack(pady=15)
+        tk.Button(btn_row, text="✅ Create", bg=COLORS["success"], fg="#000",
+                  font=FONTS["bold"], bd=0, padx=20, pady=8,
+                  command=confirm).pack(side="left", padx=8)
+        tk.Button(btn_row, text="❌ Cancel", bg=COLORS["bg_light"], fg=COLORS["text"],
+                  font=FONTS["bold"], bd=0, padx=20, pady=8,
+                  command=win.destroy).pack(side="left", padx=8)
 
     def _delete_group(self):
         if not self.selected_group_id:

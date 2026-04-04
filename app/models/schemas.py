@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.database import (
-    AccountStatus, BroadcastStatus, CampaignMode, CampaignStatus, ClientStatus, OTPStatus,
+    AccountStatus, BroadcastStatus, CampaignMode, CampaignStatus, ClientStatus, ClientPlan, OTPStatus,
     AccountFeature, AccountGroupLink,
     AccountGroupFeatureType, AccountGroupStatus,
 )
@@ -70,12 +70,20 @@ class ClientCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    plan_type: Optional[ClientPlan] = ClientPlan.starter
+    usage_limit_monthly: Optional[int] = Field(10000, ge=0)
+    webhook_url: Optional[str] = None
 
 
 class ClientUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=255)
     status: Optional[ClientStatus] = None
+    plan_type: Optional[ClientPlan] = None
     settings: Optional[Dict[str, Any]] = None
+    billing_info: Optional[Dict[str, Any]] = None
+    usage_limit_monthly: Optional[int] = Field(None, ge=0)
+    current_usage_monthly: Optional[int] = Field(None, ge=0)
+    webhook_url: Optional[str] = None
 
 
 class ClientResponse(OrmBase):
@@ -84,8 +92,28 @@ class ClientResponse(OrmBase):
     email: str
     api_key: Optional[str]
     status: ClientStatus
+    plan_type: ClientPlan
     is_admin: bool
+    usage_limit_monthly: int
+    current_usage_monthly: int
+    webhook_url: Optional[str]
     created_at: datetime
+
+
+class ClientDashboard(BaseModel):
+    client_id: int
+    client_name: str
+    plan_type: str
+    status: str
+    total_campaigns: int
+    active_campaigns: int
+    total_messages_sent: int
+    usage_limit_monthly: int
+    current_usage_monthly: int
+    usage_pct: float
+    accounts_count: int
+    account_groups_count: int
+    overall_delivery_rate: float
 
 
 # ── Telegram Account ──────────────────────────────────────────────────────────

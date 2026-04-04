@@ -22,6 +22,12 @@ class ClientStatus(str, enum.Enum):
     trial = "trial"
 
 
+class ClientPlan(str, enum.Enum):
+    starter = "starter"
+    pro = "pro"
+    enterprise = "enterprise"
+
+
 class AccountStatus(str, enum.Enum):
     active = "active"
     banned = "banned"
@@ -73,8 +79,13 @@ class Client(Base):
     hashed_password = Column(String(255), nullable=False)
     api_key = Column(String(64), unique=True, index=True)
     status = Column(Enum(ClientStatus), default=ClientStatus.trial, nullable=False)
+    plan_type = Column(Enum(ClientPlan), default=ClientPlan.starter, nullable=False)
     is_admin = Column(Boolean, default=False)
     settings = Column(JSON, default=dict)
+    billing_info = Column(JSON, default=dict)
+    usage_limit_monthly = Column(Integer, default=10000)
+    current_usage_monthly = Column(Integer, default=0)
+    webhook_url = Column(String(512), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

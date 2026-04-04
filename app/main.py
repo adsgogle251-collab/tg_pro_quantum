@@ -3,7 +3,7 @@ TG PRO QUANTUM - FastAPI Application Entry Point
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -12,6 +12,7 @@ from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.api.routes import auth, clients, accounts, groups, campaigns, broadcasts, analytics
 from app.api.routes import account_groups
 from app.utils.logger import get_logger
+from app.websocket_manager import ws_manager
 
 logger = get_logger(__name__)
 
@@ -79,3 +80,38 @@ async def root():
         "version": settings.APP_VERSION,
         "docs": "/docs",
     }
+
+
+# ── WebSocket endpoints ───────────────────────────────────────────────────────
+
+@app.websocket("/ws/campaigns/{campaign_id}")
+async def ws_campaign(websocket: WebSocket, campaign_id: int):
+    """
+    Real-time campaign progress stream.
+
+    Clients connect here to receive live updates:
+      - campaign_update: sent/failed/total/success_rate/active_account/status
+      - delivery: per-message delivery confirmation
+    """
+    room = f"campaign:{campaign_id}"
+    await ws_manager.connect(websocket, room)
+    try:
+        while True:
+            # Keep connection alive; clients may send ping frames
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, room)
+
+
+@app.websocket("/ws/clients/{client_id}")
+async def ws_client(websocket: WebSocket, client_id: int):
+    """
+    Real-time client-level notifications (account health changes, etc.).
+    """
+    room = f"client:{client_id}"
+    await ws_manager.connect(websocket, room)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, room)
