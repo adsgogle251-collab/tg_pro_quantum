@@ -133,11 +133,23 @@ class ClientManager:
         return list(self.clients.values())
     
     def update_client(self, client_id: str, **kwargs) -> bool:
-        """Update client settings"""
+        """Update client settings.
+
+        Allowed fields: name, email, company, phone, notes, tier, plan_type, status,
+        usage_limit_monthly, current_usage_monthly, webhook_url, account_groups,
+        campaigns, settings, billing_info, last_active.
+        """
         if client_id not in self.clients:
             return False
+        allowed = {
+            "name", "email", "company", "phone", "notes", "tier", "plan_type",
+            "status", "usage_limit_monthly", "current_usage_monthly", "webhook_url",
+            "account_groups", "campaigns", "settings", "billing_info", "last_active",
+            "limits",
+        }
         for key, value in kwargs.items():
-            self.clients[client_id][key] = value
+            if key in allowed:
+                self.clients[client_id][key] = value
         self._save_clients()
         log(f"Client updated: {client_id}", "info")
         return True

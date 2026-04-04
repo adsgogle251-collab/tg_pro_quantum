@@ -321,7 +321,7 @@ class ClientsTab:
         plan = client.get("plan_type", "starter")
         plan_label = PLAN_LABELS.get(plan, plan)
         status = client.get("status", "active")
-        api_key = client.get("api_key", "")
+        api_key = client.get("api_key") or ""
         api_display = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else api_key or "—"
 
         info_text = (
