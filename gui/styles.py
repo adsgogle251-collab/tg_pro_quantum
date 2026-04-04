@@ -63,6 +63,9 @@ FONTS = {
     "bold": ("Segoe UI", 11, "bold"),
     "mono": ("Consolas", 10),
     "title": ("Segoe UI", 18, "bold"),
+    # Phase 3 aliases
+    "body": ("Segoe UI", 10),
+    "body_bold": ("Segoe UI", 10, "bold"),
 }
 
 # ═══════════════════════════════════════════════════════

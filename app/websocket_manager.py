@@ -132,6 +132,98 @@ class WebSocketManager:
             },
         )
 
+    async def broadcast_account_rotated(
+        self,
+        campaign_id: int,
+        old_account: str,
+        new_account: str,
+        reason: str = "rotation",
+    ) -> None:
+        """Push an account-rotation event to a campaign room."""
+        await self.broadcast(
+            f"campaign:{campaign_id}",
+            {
+                "type": "account_rotated",
+                "campaign_id": campaign_id,
+                "old_account": old_account,
+                "new_account": new_account,
+                "reason": reason,
+            },
+        )
+
+    async def broadcast_account_health_changed(
+        self,
+        client_id: int,
+        account_name: str,
+        old_health: float,
+        new_health: float,
+        status: str,
+    ) -> None:
+        """Push an account health-change event to the client room."""
+        await self.broadcast(
+            f"client:{client_id}",
+            {
+                "type": "account_health_changed",
+                "account": account_name,
+                "old_health": old_health,
+                "new_health": new_health,
+                "status": status,
+            },
+        )
+
+    async def broadcast_campaign_status_changed(
+        self,
+        campaign_id: int,
+        client_id: int,
+        old_status: str,
+        new_status: str,
+    ) -> None:
+        """Push a campaign status-change event to both rooms."""
+        payload = {
+            "type": "campaign_status_changed",
+            "campaign_id": campaign_id,
+            "old_status": old_status,
+            "new_status": new_status,
+        }
+        await self.broadcast(f"campaign:{campaign_id}", payload)
+        await self.broadcast(f"client:{client_id}", payload)
+
+    async def broadcast_error(
+        self,
+        campaign_id: int,
+        client_id: int,
+        error_type: str,
+        message: str,
+    ) -> None:
+        """Push an error event."""
+        payload = {
+            "type": "error_occurred",
+            "campaign_id": campaign_id,
+            "error_type": error_type,
+            "message": message,
+        }
+        await self.broadcast(f"campaign:{campaign_id}", payload)
+        await self.broadcast(f"client:{client_id}", payload)
+
+    async def broadcast_safety_alert(
+        self,
+        client_id: int,
+        alert_type: str,
+        severity: str,
+        message: str,
+        campaign_id: Optional[int] = None,
+    ) -> None:
+        """Push a safety alert to the client room (and admin room)."""
+        payload = {
+            "type": "safety_alert",
+            "campaign_id": campaign_id,
+            "alert_type": alert_type,
+            "severity": severity,
+            "message": message,
+        }
+        await self.broadcast(f"client:{client_id}", payload)
+        await self.broadcast("admin", payload)
+
     # ── Utility ───────────────────────────────────────────────────────────────
 
     def room_size(self, room: str) -> int:
