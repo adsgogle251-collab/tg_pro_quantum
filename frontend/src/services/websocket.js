@@ -6,7 +6,7 @@ const listeners = {}
 const wsService = {
   connect() {
     if (socket?.connected) return
-    socket = io('http://localhost:8000', {
+    socket = io(import.meta.env.VITE_WS_URL ?? 'http://localhost:8000', {
       path: '/ws/',
       transports: ['websocket'],
       autoConnect: true,

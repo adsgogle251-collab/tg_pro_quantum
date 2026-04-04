@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import theme from '../../styles/theme'
 
 const inputBase = {
@@ -13,6 +14,8 @@ const inputBase = {
 }
 
 export function FormInput({ label, ...props }) {
+  const [focused, setFocused] = useState(false)
+
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {label && (
@@ -22,16 +25,11 @@ export function FormInput({ label, ...props }) {
         {...props}
         style={{
           ...inputBase,
+          borderColor: focused ? theme.primary : theme.bgLight,
           ...(props.style ?? {}),
         }}
-        onFocus={(e) => {
-          e.target.style.borderColor = theme.primary
-          props.onFocus?.(e)
-        }}
-        onBlur={(e) => {
-          e.target.style.borderColor = theme.bgLight
-          props.onBlur?.(e)
-        }}
+        onFocus={(e) => { setFocused(true);  props.onFocus?.(e) }}
+        onBlur={(e)  => { setFocused(false); props.onBlur?.(e)  }}
       />
     </label>
   )
