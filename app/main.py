@@ -75,6 +75,57 @@ async def health():
     return {"status": "ok", "version": settings.APP_VERSION}
 
 
+@app.get("/health/detailed", tags=["Health"])
+async def health_detailed():
+    """
+    Detailed health check including database connectivity.
+    Returns HTTP 200 when healthy or HTTP 503 when any component is down.
+    """
+    import time
+    from fastapi.responses import JSONResponse
+    from app.database import engine
+
+    checks: dict = {}
+    overall_healthy = True
+
+    # Database check
+    db_start = time.monotonic()
+    try:
+        async with engine.connect() as conn:
+            from sqlalchemy import text
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = {
+            "status": "ok",
+            "latency_ms": round((time.monotonic() - db_start) * 1000, 2),
+        }
+    except Exception as exc:
+        checks["database"] = {"status": "error", "detail": str(exc)}
+        overall_healthy = False
+
+    # Redis check (optional – don't fail if Redis is not configured)
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+        redis_start = time.monotonic()
+        await r.ping()
+        await r.aclose()
+        checks["redis"] = {
+            "status": "ok",
+            "latency_ms": round((time.monotonic() - redis_start) * 1000, 2),
+        }
+    except Exception as exc:
+        checks["redis"] = {"status": "unavailable", "detail": str(exc)}
+        # Redis is optional; don't mark as unhealthy
+
+    response_body = {
+        "status": "ok" if overall_healthy else "degraded",
+        "version": settings.APP_VERSION,
+        "checks": checks,
+    }
+    status_code = 200 if overall_healthy else 503
+    return JSONResponse(content=response_body, status_code=status_code)
+
+
 @app.get("/", tags=["Root"])
 async def root():
     return {
