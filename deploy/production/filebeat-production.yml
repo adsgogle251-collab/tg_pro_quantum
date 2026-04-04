@@ -1,0 +1,119 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Filebeat Production Configuration
+# Collects logs from FastAPI, Nginx, PostgreSQL, Redis, and system.
+# ─────────────────────────────────────────────────────────────────────────────
+
+filebeat.inputs:
+  # ── FastAPI application logs ────────────────────────────────────────────────
+  - type: log
+    id: fastapi-app
+    enabled: true
+    paths:
+      - /app/logs/app.log
+      - /app/logs/app.*.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    fields:
+      service: fastapi
+      environment: production
+    fields_under_root: true
+    multiline.type: pattern
+    multiline.pattern: '^\{'
+    multiline.negate: true
+    multiline.match: after
+
+  # ── Nginx access logs ────────────────────────────────────────────────────────
+  - type: log
+    id: nginx-access
+    enabled: true
+    paths:
+      - /var/log/nginx/access.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    fields:
+      service: nginx
+      log_type: access
+      environment: production
+    fields_under_root: true
+
+  # ── Nginx error logs ─────────────────────────────────────────────────────────
+  - type: log
+    id: nginx-error
+    enabled: true
+    paths:
+      - /var/log/nginx/error.log
+    fields:
+      service: nginx
+      log_type: error
+      environment: production
+    fields_under_root: true
+
+  # ── Docker container logs ────────────────────────────────────────────────────
+  - type: container
+    id: docker-containers
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+
+# ── Log processing ────────────────────────────────────────────────────────────
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_fields:
+      target: ''
+      fields:
+        environment: production
+        project: tg-pro-quantum
+  - drop_fields:
+      fields: ["agent.ephemeral_id", "ecs"]
+      ignore_missing: true
+
+# ── Output to Elasticsearch ───────────────────────────────────────────────────
+output.elasticsearch:
+  hosts:
+    - "elasticsearch-1:9200"
+    - "elasticsearch-2:9200"
+    - "elasticsearch-3:9200"
+  username: elastic
+  password: "${ELASTICSEARCH_PASSWORD}"
+  index: "tgpq-logs-%{+yyyy.MM.dd}"
+  ssl.verification_mode: none
+  bulk_max_size: 2048
+  worker: 4
+
+# ── Index lifecycle management ────────────────────────────────────────────────
+setup.ilm.enabled: true
+setup.ilm.policy_name: tgpq-30day-retention
+setup.ilm.rollover_alias: tgpq-logs
+
+# ── Index template ────────────────────────────────────────────────────────────
+setup.template.name: tgpq-logs
+setup.template.pattern: "tgpq-logs-*"
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 1
+
+# ── Kibana ────────────────────────────────────────────────────────────────────
+setup.kibana:
+  host: "kibana:5601"
+  username: elastic
+  password: "${ELASTICSEARCH_PASSWORD}"
+
+# ── Logging (filebeat itself) ─────────────────────────────────────────────────
+logging.level: warning
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0640
+
+# ── Queue ─────────────────────────────────────────────────────────────────────
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: 5s

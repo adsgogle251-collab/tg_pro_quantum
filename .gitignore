@@ -48,3 +48,7 @@ Thumbs.db
 # Alembic
 alembic/versions/*.pyc
 gui/tabs/__pycache__
+
+# Production secrets & certificates (never commit populated secrets)
+deploy/production/ssl/
+deploy/staging/ssl/
