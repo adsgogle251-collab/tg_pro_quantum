@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.models.database import (
     AccountStatus, BroadcastStatus, CampaignMode, CampaignStatus, ClientStatus, OTPStatus,
     AccountFeature, AccountGroupLink,
+    AccountGroupFeatureType, AccountGroupStatus,
 )
 
 
@@ -311,3 +312,72 @@ class PaginatedResponse(BaseModel):
     page: int
     per_page: int
     items: List[Any]
+
+
+# ── Account Groups (Enterprise) ───────────────────────────────────────────────
+
+class AccountGroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    feature_type: AccountGroupFeatureType = AccountGroupFeatureType.general
+    client_id: Optional[int] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class AccountGroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    feature_type: Optional[AccountGroupFeatureType] = None
+    status: Optional[AccountGroupStatus] = None
+    client_id: Optional[int] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class AccountGroupResponse(OrmBase):
+    id: int
+    name: str
+    feature_type: AccountGroupFeatureType
+    status: AccountGroupStatus
+    client_id: Optional[int]
+    config: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class AccountAssignmentCreate(BaseModel):
+    account_id: int
+    feature_type: str = "general"
+
+
+class AccountAssignmentResponse(OrmBase):
+    id: int
+    account_id: int
+    account_group_id: int
+    feature_type: str
+    assigned_at: datetime
+    status: str
+
+
+class AccountHealthResponse(OrmBase):
+    id: int
+    account_id: int
+    account_group_id: int
+    health_score: float
+    warnings: int
+    is_banned: bool
+    last_check: datetime
+    details: Optional[Dict[str, Any]]
+
+
+class GroupAnalyticsResponse(OrmBase):
+    id: int
+    account_group_id: int
+    messages_sent: int
+    success_rate: float
+    health_avg: float
+    period_start: datetime
+    period_end: Optional[datetime]
+    created_at: datetime
+
+
+class AccountGroupBulkImport(BaseModel):
+    account_ids: List[int] = Field(..., min_length=1)
+    feature_type: str = "general"

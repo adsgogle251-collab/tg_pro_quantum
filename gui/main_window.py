@@ -45,6 +45,7 @@ from gui.tabs.tools_tab import ToolsTab
 from gui.tabs.clients_tab import ClientsTab
 from gui.tabs.client_portal_tab import ClientPortalTab
 from gui.tabs.help_tab import HelpTab
+from gui.tabs.account_groups_tab import AccountGroupsTab
 
 
 class MainWindow:
@@ -70,6 +71,7 @@ class MainWindow:
             log("⚠️ API not configured. Set in Settings tab.", "warning")
         
         # Create UI
+        self._tab_btn_map = {}
         self._create_sidebar()
         self._create_notebook()
         self._create_statusbar()
@@ -119,10 +121,11 @@ class MainWindow:
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
-        # All tabs (22 total)
+        # All tabs (23 total) - (label, notebook_tab_index)
         buttons = [
             ("📊 Dasbor", 0),
-            ("📈 Kamp. Dashboard", 1),
+            ("📂 Account Groups", 22),
+            ("👥 Klien", 19),
             ("📢 Siaran", 2),
             ("📱 Akun", 3),
             ("📈 Kampanye", 4),
@@ -133,6 +136,7 @@ class MainWindow:
             ("📊 Analitik", 9),
             ("🤝 CRM", 10),
             ("💳 Tagihan", 11),
+            ("📈 Kamp. Dashboard", 1),
             ("🔒 Keamanan", 12),
             ("👥 Pengguna", 13),
             ("🎨 Label Putih", 14),
@@ -140,13 +144,14 @@ class MainWindow:
             ("⚙️ Pengaturan", 16),
             ("📝 Log", 17),
             ("🛠️ Alat", 18),
-            ("👥 Klien", 19),
             ("👤 Portal", 20),
             ("❓ Bantuan", 21),
         ]
         
+        # Map from notebook tab index → sidebar button widget
+        self._tab_btn_map = {}
         self.nav_buttons = []
-        for text, index in buttons:
+        for text, tab_index in buttons:
             btn_frame = tk.Frame(scrollable_frame, bg="#0f3460")
             btn_frame.pack(fill="x", pady=1)
             
@@ -156,9 +161,10 @@ class MainWindow:
                             activebackground="#00d9ff", 
                             activeforeground="#000000",
                             bd=0, anchor="w", padx=20, pady=12,
-                            command=lambda i=index: self._switch_tab(i))
+                            command=lambda i=tab_index: self._switch_tab(i))
             btn.pack(fill="x")
             self.nav_buttons.append(btn)
+            self._tab_btn_map[tab_index] = btn
         
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -210,6 +216,7 @@ class MainWindow:
             "clients": ClientsTab(self.notebook, self),
             "client_portal": ClientPortalTab(self.notebook, self),
             "help": HelpTab(self.notebook, self),
+            "account_groups": AccountGroupsTab(self.notebook, self),
         }
         
         self.account_tab = self.tabs["account"]
@@ -259,9 +266,9 @@ class MainWindow:
         """Switch tab with visual feedback"""
         self.notebook.select(index)
         
-        # Update button colors
-        for i, btn in enumerate(self.nav_buttons):
-            if i == index:
+        # Update button colors using tab_index → button map
+        for tab_idx, btn in self._tab_btn_map.items():
+            if tab_idx == index:
                 btn.config(bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold"))
             else:
                 btn.config(bg="#0f3460", fg="#888888", font=("Segoe UI", 11))
@@ -284,6 +291,8 @@ class MainWindow:
                 self.tabs["ai_cs"]._on_tab_selected()
             elif index == 17 and hasattr(self, 'log_tab'):
                 self.log_tab._refresh()
+            elif index == 22 and "account_groups" in self.tabs:
+                self.tabs["account_groups"]._on_tab_selected()
         except Exception as e:
             log(f"Error refreshing tab {index}: {e}", "warning")
 

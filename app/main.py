@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import init_db
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.api.routes import auth, clients, accounts, groups, campaigns, broadcasts, analytics
+from app.api.routes import account_groups
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +62,7 @@ app.include_router(groups.router, prefix=API_PREFIX)
 app.include_router(campaigns.router, prefix=API_PREFIX)
 app.include_router(broadcasts.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
+app.include_router(account_groups.router, prefix=API_PREFIX)
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────
