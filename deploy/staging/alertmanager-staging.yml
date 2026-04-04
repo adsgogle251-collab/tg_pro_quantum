@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TG PRO QUANTUM – Alertmanager Staging Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  resolve_timeout: 5m
+  smtp_from: alerts@tg-pro-quantum.app
+  smtp_smarthost: smtp.example.com:587
+  smtp_auth_username: alerts@tg-pro-quantum.app
+  smtp_auth_password: CHANGE_ME
+  smtp_require_tls: true
+  slack_api_url: https://hooks.slack.com/services/CHANGE_ME
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+# ── Route tree ───────────────────────────────────────────────────────────────
+route:
+  receiver: default-receiver
+  group_by: [alertname, environment, severity]
+  group_wait:      30s
+  group_interval:  5m
+  repeat_interval: 1h
+
+  routes:
+    # Critical alerts – immediate Slack + email
+    - match:
+        severity: critical
+      receiver: critical-receiver
+      group_wait: 10s
+      repeat_interval: 15m
+
+    # Warning alerts – Slack only
+    - match:
+        severity: warning
+      receiver: warning-receiver
+      group_wait: 1m
+      repeat_interval: 2h
+
+# ── Receivers ────────────────────────────────────────────────────────────────
+receivers:
+  - name: default-receiver
+    slack_configs:
+      - channel: "#tgpq-staging-alerts"
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Environment:* {{ .Labels.environment }}
+          {{ end }}
+
+  - name: critical-receiver
+    slack_configs:
+      - channel: "#tgpq-staging-critical"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+    email_configs:
+      - to: ops@tg-pro-quantum.app
+        send_resolved: true
+        subject: '[CRITICAL] TG PRO QUANTUM Staging Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          {{ range .Alerts }}
+          <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Details:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          {{ end }}
+
+  - name: warning-receiver
+    slack_configs:
+      - channel: "#tgpq-staging-alerts"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          {{ end }}
+
+# ── Inhibit rules ─────────────────────────────────────────────────────────────
+inhibit_rules:
+  # Suppress warnings when a critical alert is already firing for the same service
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: [alertname, environment]

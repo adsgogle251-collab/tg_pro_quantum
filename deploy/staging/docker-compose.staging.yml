@@ -1,0 +1,269 @@
+version: "3.9"
+
+# ── TG PRO QUANTUM – Staging Environment ─────────────────────────────────────
+# All secrets must be overridden via .env.staging or Docker secrets.
+# Start with: docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
+
+x-common-env: &common-env
+  DATABASE_URL: ${DATABASE_URL}
+  REDIS_URL: ${REDIS_URL}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+  SECRET_KEY: ${SECRET_KEY}
+  DEBUG: ${DEBUG:-false}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+  APP_ENV: staging
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: tgpq-staging-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tg_quantum_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-tgpq_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+      - ./init-postgres-staging.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tgpq_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging-net
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tgpq-staging-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis_staging_data:/data
+      - ./redis-staging.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging-net
+
+  # ── FastAPI Application ─────────────────────────────────────────────────────
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: tgpq-staging-app
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    env_file:
+      - .env.staging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./sessions:/app/sessions
+      - ./logs:/app/logs
+      - ./data:/app/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - staging-net
+
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: tgpq-staging-worker
+    restart: unless-stopped
+    command: celery -A tasks.broadcast_tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      <<: *common-env
+    env_file:
+      - .env.staging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./sessions:/app/sessions
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - staging-net
+
+  # ── Celery Beat ─────────────────────────────────────────────────────────────
+  celery_beat:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: tgpq-staging-beat
+    restart: unless-stopped
+    command: celery -A tasks.scheduler_tasks.celery_app beat --loglevel=info
+    environment:
+      <<: *common-env
+    env_file:
+      - .env.staging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - staging-net
+
+  # ── Nginx Reverse Proxy ─────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: tgpq-staging-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.staging.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_staging_logs:/var/log/nginx
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - staging-net
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: tgpq-staging-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.staging.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules.staging.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_staging_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - staging-net
+
+  # ── Alertmanager ────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: tgpq-staging-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./alertmanager-staging.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    networks:
+      - staging-net
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: tgpq-staging-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://monitoring-staging.tg-pro-quantum.app
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+      - ./grafana-dashboards.staging.json:/etc/grafana/provisioning/dashboards/tgpq.json:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - staging-net
+
+  # ── Elasticsearch ───────────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: tgpq-staging-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_staging_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - staging-net
+
+  # ── Kibana ──────────────────────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: tgpq-staging-kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - staging-net
+
+  # ── Filebeat ────────────────────────────────────────────────────────────────
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.12.0
+    container_name: tgpq-staging-filebeat
+    restart: unless-stopped
+    user: root
+    volumes:
+      - ./filebeat-staging.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./logs:/app/logs:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - staging-net
+
+volumes:
+  postgres_staging_data:
+  redis_staging_data:
+  prometheus_staging_data:
+  grafana_staging_data:
+  elasticsearch_staging_data:
+  nginx_staging_logs:
+
+networks:
+  staging-net:
+    driver: bridge
