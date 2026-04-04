@@ -9,6 +9,8 @@ import threading
 import json
 from pathlib import Path
 from datetime import datetime
+from core.state_manager import state_manager
+from core.localization import t
 
 class ScrapeTab:
     title = "📥 Scrape"
@@ -19,10 +21,14 @@ class ScrapeTab:
         self.frame = ttk.Frame(parent)
         self.scraping = False
         self._create_widgets()
+        # Listen for account assignment changes
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
+        state_manager.on_state_change("refresh_all", self._on_account_changed)
+        self._load_accounts()
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📥 Group Member Scraper", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"📥 {t('Group Member Scraper')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # === MAIN SCROLLABLE CONTAINER ===
@@ -44,7 +50,7 @@ class ScrapeTab:
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
         # === 1. ACCOUNT SELECTION ===
-        account_frame = tk.LabelFrame(self.scrollable_frame, text="📱 Accounts for Scrape",
+        account_frame = tk.LabelFrame(self.scrollable_frame, text=f"📱 {t('Accounts for Scrape')}",
                                       fg=COLORS["accent"], bg=COLORS["bg_medium"],
                                       font=FONTS["heading"])
         account_frame.pack(fill="x", padx=10, pady=10)
@@ -362,3 +368,28 @@ class ScrapeTab:
     
     def _refresh(self):
         self._load_account_lists()
+
+    def _on_account_changed(self, data=None):
+        """Refresh account lists when assignments change"""
+        try:
+            self._load_accounts()
+        except Exception:
+            pass
+
+    def _load_accounts(self):
+        """Load accounts assigned to scrape feature"""
+        try:
+            all_accs = account_manager.get_all()
+            scrape_accs = account_manager.get_accounts_by_feature("scrape")
+
+            self.available_accounts.delete(0, "end")
+            for acc in all_accs:
+                name = acc.get("name", "")
+                if name not in [a.get("name", "") for a in scrape_accs]:
+                    self.available_accounts.insert("end", name)
+
+            self.assigned_accounts.delete(0, "end")
+            for acc in scrape_accs:
+                self.assigned_accounts.insert("end", acc.get("name", ""))
+        except Exception:
+            pass

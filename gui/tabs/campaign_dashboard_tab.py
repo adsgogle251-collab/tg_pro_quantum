@@ -6,6 +6,8 @@ from core import campaign_manager, statistics
 from core.scheduler_24h import scheduler_24h
 from core.clients import client_manager
 from gui.styles import COLORS, FONTS
+from core.state_manager import state_manager
+from core.localization import t
 
 class CampaignDashboardTab:
     title = "📊 Campaign Dashboard"
@@ -17,6 +19,7 @@ class CampaignDashboardTab:
         self._create_widgets()
         self._load_dashboard()
         self._start_auto_refresh()
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
     
     def _create_widgets(self):
         # Header
@@ -302,3 +305,10 @@ class CampaignDashboardTab:
     
     def _refresh(self):
         self._load_dashboard()
+
+    def _on_account_changed(self, data=None):
+        try:
+            if hasattr(self, '_refresh') and callable(self._refresh):
+                self._refresh()
+        except Exception:
+            pass

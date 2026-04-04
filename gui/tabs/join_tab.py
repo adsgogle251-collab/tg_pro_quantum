@@ -7,6 +7,8 @@ from core.utils import DATA_DIR
 from gui.styles import COLORS, FONTS
 import threading
 from pathlib import Path
+from core.state_manager import state_manager
+from core.localization import t
 
 class JoinTab:
     title = "📤 Join"
@@ -18,10 +20,13 @@ class JoinTab:
         self.running = False
         self.groups_to_join = []
         self._create_widgets()
-    
+        # Listen for account assignment changes
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
+        state_manager.on_state_change("refresh_all", self._on_account_changed)
+
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="📤 Auto Join Groups", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"📤 {t('Auto Join Groups')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # Main scrollable container
@@ -43,7 +48,7 @@ class JoinTab:
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
         # 1. Source Selection
-        source_frame = tk.LabelFrame(self.scrollable_frame, text="📁 Select Group Source",
+        source_frame = tk.LabelFrame(self.scrollable_frame, text=f"📁 {t('Select Group Source')}",
                                      fg=COLORS["accent"], bg=COLORS["bg_medium"],
                                      font=FONTS["heading"])
         source_frame.pack(fill="x", padx=10, pady=10)
@@ -387,3 +392,24 @@ class JoinTab:
     
     def _refresh(self):
         self._load_account_lists()
+
+    def _on_account_changed(self, data=None):
+        """Refresh when account assignments change"""
+        try:
+            self._load_join_accounts()
+        except Exception:
+            pass
+
+    def _load_join_accounts(self):
+        """Load accounts assigned to join feature"""
+        try:
+            join_accs = account_manager.get_accounts_by_feature("join")
+            if hasattr(self, 'account_combo'):
+                all_accs = [a.get("name", "") for a in account_manager.get_all()]
+                join_names = [a.get("name", "") for a in join_accs]
+                vals = join_names if join_names else all_accs
+                self.account_combo['values'] = vals
+                if vals and not self.account_combo.get():
+                    self.account_combo.set(vals[0])
+        except Exception:
+            pass

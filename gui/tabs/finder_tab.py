@@ -9,6 +9,8 @@ import threading
 import random
 from pathlib import Path
 from datetime import datetime
+from core.state_manager import state_manager
+from core.localization import t
 
 class FinderTab:
     title = "🔍 Finder"
@@ -21,10 +23,13 @@ class FinderTab:
         self.found_groups = []
         self.search_running = False
         self._create_widgets()
+        # Listen for account assignment changes
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
+        self._refresh_accounts()
     
     def _create_widgets(self):
         # Header
-        tk.Label(self.frame, text="🔍 AI Group Finder", font=("Segoe UI", 24, "bold"),
+        tk.Label(self.frame, text=f"🔍 {t('AI Group Finder')}", font=("Segoe UI", 24, "bold"),
                  fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
         
         # Main container with scrollbar
@@ -48,7 +53,7 @@ class FinderTab:
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
         # 1. Account Selection Section
-        account_frame = tk.LabelFrame(self.scrollable_frame, text="📱 Accounts for Finder",
+        account_frame = tk.LabelFrame(self.scrollable_frame, text=f"📱 {t('Accounts for Finder')}",
                                       fg=COLORS["accent"], bg=COLORS["bg_medium"],
                                       font=FONTS["heading"])
         account_frame.pack(fill="x", padx=10, pady=10)
@@ -475,3 +480,29 @@ class FinderTab:
     
     def _refresh(self):
         self._load_account_lists()
+
+    def _on_account_changed(self, data=None):
+        """Refresh when account assignments change"""
+        try:
+            self._refresh_accounts()
+        except Exception:
+            pass
+
+    def _refresh_accounts(self):
+        """Refresh account listboxes with finder-assigned accounts"""
+        try:
+            all_accs = account_manager.get_all()
+            finder_accs = account_manager.get_accounts_by_feature("finder")
+            finder_names = [a.get("name", "") for a in finder_accs]
+            all_names = [a.get("name", "") for a in all_accs]
+
+            self.available_accounts.delete(0, "end")
+            for name in all_names:
+                if name not in finder_names:
+                    self.available_accounts.insert("end", name)
+
+            self.assigned_accounts.delete(0, "end")
+            for name in finder_names:
+                self.assigned_accounts.insert("end", name)
+        except Exception:
+            pass

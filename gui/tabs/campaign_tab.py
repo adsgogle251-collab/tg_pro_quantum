@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from core import log, account_manager, template_manager, scheduler, load_groups  # ← HAPUS campaign_manager dari sini
 from core.campaign_manager import campaign_manager, CampaignStatus, CampaignType  # ← TAMBAH campaign_manager di sini!
 from core.scheduler import TaskType
+from core.state_manager import state_manager
+from core.localization import t
 from gui.styles import COLORS, FONTS
 
 class CampaignTab:
@@ -19,6 +21,7 @@ class CampaignTab:
         self.current_campaign_id = None
         self._create_widgets()
         self._load_campaigns()
+        state_manager.on_state_change("account_assigned", self._on_account_changed)
     
     def _create_widgets(self):
         # Header
@@ -563,3 +566,13 @@ class CampaignTab:
     
     def _refresh(self):
         self._load_campaigns()
+
+    def _on_account_changed(self, data=None):
+        """Refresh when account assignments change"""
+        try:
+            if hasattr(self, '_refresh_accounts'):
+                self._refresh_accounts()
+            elif hasattr(self, '_load_accounts'):
+                self._load_accounts()
+        except Exception:
+            pass
