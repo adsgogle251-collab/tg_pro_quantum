@@ -46,6 +46,19 @@ export const updateProfile = (data) =>
 export const changePassword = (data) =>
   api.post('/users/me/change-password', data).then((r) => r.data)
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+export const getSettings = () =>
+  api.get('/settings').then((r) => r.data)
+
+export const updateSettings = (data) =>
+  api.put('/settings', data).then((r) => r.data)
+
+export const getPreferences = () =>
+  api.get('/settings/preferences').then((r) => r.data)
+
+export const updatePreferences = (data) =>
+  api.put('/settings/preferences', data).then((r) => r.data)
+
 // ─── 2FA ─────────────────────────────────────────────────────────────────────
 export const setup2FA = () =>
   api.post('/auth/2fa/setup').then((r) => r.data)
@@ -70,16 +83,52 @@ export const revokeApiKey = (id) =>
 export const getAccounts = (params) =>
   api.get('/accounts', { params }).then((r) => r.data)
 
+export const createAccount = (data) =>
+  api.post('/accounts', data).then((r) => r.data)
+
+export const updateAccount = (id, data) =>
+  api.patch(`/accounts/${id}`, data).then((r) => r.data)
+
+export const deleteAccount = (id) =>
+  api.delete(`/accounts/${id}`).then((r) => r.data)
+
+export const getAccountStats = () =>
+  api.get('/analytics/overview').then((r) => r.data)
+
 // ─── Campaigns ───────────────────────────────────────────────────────────────
 export const getCampaigns = (params) =>
   api.get('/campaigns', { params }).then((r) => r.data)
+
+export const createCampaign = (data) =>
+  api.post('/campaigns', data).then((r) => r.data)
+
+export const updateCampaign = (id, data) =>
+  api.patch(`/campaigns/${id}`, data).then((r) => r.data)
+
+export const deleteCampaign = (id) =>
+  api.delete(`/campaigns/${id}`).then((r) => r.data)
+
+export const getCampaign = (id) =>
+  api.get(`/campaigns/${id}`).then((r) => r.data)
 
 export const exportCampaigns = (params) =>
   api.get('/campaigns/export', { params, responseType: 'blob' }).then((r) => r.data)
 
 // ─── Analytics ───────────────────────────────────────────────────────────────
 export const getAnalytics = (params) =>
-  api.get('/analytics', { params }).then((r) => r.data)
+  api.get('/analytics/overview', { params }).then((r) => r.data)
+
+export const getAnalyticsDashboard = () =>
+  api.get('/analytics/dashboard').then((r) => r.data)
+
+export const getAnalyticsCharts = (params) =>
+  api.get('/analytics/charts', { params }).then((r) => r.data)
+
+export const getAnalyticsTimeline = (params) =>
+  api.get('/analytics/timeline', { params }).then((r) => r.data)
+
+export const getCampaignAnalytics = () =>
+  api.get('/analytics/campaigns').then((r) => r.data)
 
 // ─── Broadcast ───────────────────────────────────────────────────────────────
 export const getBroadcastStats = () =>
@@ -98,12 +147,44 @@ export const createLicense = (data) =>
 export const updateLicense = (id, data) =>
   api.patch(`/admin/licenses/${id}`, data).then((r) => r.data)
 
+export const deleteLicense = (id) =>
+  api.delete(`/admin/licenses/${id}`).then((r) => r.data)
+
 // ─── Admin — Clients ─────────────────────────────────────────────────────────
 export const getClients = (params) =>
   api.get('/admin/clients', { params }).then((r) => r.data)
 
 export const updateClient = (id, data) =>
   api.patch(`/admin/clients/${id}`, data).then((r) => r.data)
+
+// ─── Admin — Users ───────────────────────────────────────────────────────────
+export const getAdminUsers = (params) =>
+  api.get('/admin/users', { params }).then((r) => r.data)
+
+export const createAdminUser = (data) =>
+  api.post('/admin/users', data).then((r) => r.data)
+
+export const getAdminUser = (id) =>
+  api.get(`/admin/users/${id}`).then((r) => r.data)
+
+export const updateAdminUser = (id, data) =>
+  api.put(`/admin/users/${id}`, data).then((r) => r.data)
+
+export const deleteAdminUser = (id) =>
+  api.delete(`/admin/users/${id}`).then((r) => r.data)
+
+export const suspendUser = (id) =>
+  api.put(`/admin/users/${id}/suspend`).then((r) => r.data)
+
+export const restoreUser = (id) =>
+  api.put(`/admin/users/${id}/restore`).then((r) => r.data)
+
+// ─── Admin — Stats & Audit ───────────────────────────────────────────────────
+export const getAdminStats = () =>
+  api.get('/admin/stats').then((r) => r.data)
+
+export const getAdminAuditLogs = (params) =>
+  api.get('/admin/audit-logs', { params }).then((r) => r.data)
 
 // ─── Notifications ───────────────────────────────────────────────────────────
 export const getNotifications = (params) =>

@@ -1,22 +1,18 @@
-import { useState, useEffect } from 'react'
-import { MdAdd, MdDelete } from 'react-icons/md'
-import { getAccounts } from '../services/api'
-import { FormButton } from '../components/Forms'
+import { useState, useEffect, useCallback } from 'react'
+import { MdAdd, MdEdit, MdDelete, MdSearch } from 'react-icons/md'
+import { getAccounts, createAccount, deleteAccount } from '../services/api'
+import { FormButton, FormInput, FormSelect } from '../components/Forms'
 import DataTable from '../components/DataTable'
+import ConfirmModal from '../components/ConfirmModal'
+import { useToast } from '../context/ToastContext'
 import theme from '../styles/theme'
 
-const MOCK = [
-  { id: 1, username: '@alice_bot',   phone: '+1 555 0101', status: 'active',   sessions: 3 },
-  { id: 2, username: '@bob_sender',  phone: '+1 555 0102', status: 'active',   sessions: 1 },
-  { id: 3, username: '@charlie_tg',  phone: '+1 555 0103', status: 'banned',   sessions: 0 },
-  { id: 4, username: '@delta_proxy', phone: '+1 555 0104', status: 'inactive', sessions: 0 },
-  { id: 5, username: '@echo_main',   phone: '+1 555 0105', status: 'active',   sessions: 5 },
-]
-
 const STATUS_COLORS = {
-  active:   theme.success,
-  inactive: theme.textMuted,
-  banned:   theme.error,
+  active:      theme.success,
+  inactive:    theme.textMuted,
+  banned:      theme.error,
+  flood_wait:  theme.accent,
+  unverified:  theme.primary,
 }
 
 function StatusBadge({ status }) {
@@ -34,49 +30,168 @@ function StatusBadge({ status }) {
   )
 }
 
-export default function Accounts() {
-  const [accounts, setAccounts] = useState(MOCK)
+function AddAccountModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ name: '', phone: '', api_id: '', api_hash: '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
 
-  useEffect(() => {
-    getAccounts().then(setAccounts).catch(() => {})
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.phone.trim()) { setError('Phone is required'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(form)
+    } catch (err) {
+      setError(err?.response?.data?.detail ?? 'Add failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const overlay = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+  }
+  const modal = {
+    background: theme.bgMedium, border: `1px solid ${theme.bgLight}`,
+    borderRadius: 14, padding: 28, width: '100%', maxWidth: 460,
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Add Account</h3>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <FormInput label="Display Name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Account name" />
+          <FormInput label="Phone Number *" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+1234567890" required />
+          <FormInput label="API ID" type="number" value={form.api_id} onChange={(e) => setForm((f) => ({ ...f, api_id: e.target.value }))} placeholder="12345678" />
+          <FormInput label="API Hash" value={form.api_hash} onChange={(e) => setForm((f) => ({ ...f, api_hash: e.target.value }))} placeholder="0123456789abcdef..." />
+          {error && <p style={{ color: theme.error, fontSize: 13 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <FormButton variant="ghost" type="button" onClick={onClose}>Cancel</FormButton>
+            <FormButton type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add Account'}</FormButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all',        label: 'All Statuses' },
+  { value: 'active',     label: 'Active'       },
+  { value: 'inactive',   label: 'Inactive'     },
+  { value: 'banned',     label: 'Banned'       },
+  { value: 'flood_wait', label: 'Flood Wait'   },
+]
+
+export default function Accounts() {
+  const { showToast } = useToast()
+  const [accounts, setAccounts] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [search, setSearch]     = useState('')
+  const [filter, setFilter]     = useState('all')
+  const [showAdd, setShowAdd]   = useState(false)
+  const [confirm, setConfirm]   = useState(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    getAccounts()
+      .then((data) => setAccounts(Array.isArray(data) ? data : (data.items ?? [])))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
-  const remove = (id) => setAccounts((prev) => prev.filter((a) => a.id !== id))
+  useEffect(() => { load() }, [load])
+
+  const visible = accounts.filter((a) => {
+    const matchStatus = filter === 'all' || a.status === filter
+    const matchSearch = !search ||
+      a.name?.toLowerCase().includes(search.toLowerCase()) ||
+      a.phone?.includes(search)
+    return matchStatus && matchSearch
+  })
+
+  const handleAdd = async (form) => {
+    await createAccount(form)
+    showToast('Account added', 'success')
+    setShowAdd(false)
+    load()
+  }
+
+  const handleDelete = async () => {
+    if (!confirm) return
+    try {
+      await deleteAccount(confirm.id)
+      showToast('Account removed', 'success')
+      load()
+    } catch {
+      showToast('Delete failed', 'error')
+    } finally {
+      setConfirm(null)
+    }
+  }
 
   const columns = [
-    { key: 'id',       label: '#',        sortable: true,  width: 60 },
-    { key: 'username', label: 'Username', sortable: true,
-      render: (v) => <span style={{ fontWeight: 500, color: theme.primary }}>{v}</span> },
-    { key: 'phone',    label: 'Phone',    sortable: true },
-    { key: 'status',   label: 'Status',
+    { key: 'id',     label: '#',        sortable: true, width: 60 },
+    { key: 'name',   label: 'Name',     sortable: true,
+      render: (v) => <span style={{ fontWeight: 500 }}>{v ?? '—'}</span> },
+    { key: 'phone',  label: 'Phone',    sortable: true },
+    { key: 'status', label: 'Status',
       render: (v) => <StatusBadge status={v} /> },
-    { key: 'sessions', label: 'Sessions', sortable: true, width: 100 },
-    { key: 'id',       label: 'Actions',  width: 80,
-      render: (id) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); remove(id) }}
-          style={{ background: 'none', border: 'none', color: theme.error, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-          title="Remove"
-        >
+    { key: 'health_score', label: 'Health', sortable: true,
+      render: (v) => {
+        const score = v ?? 0
+        const color = score >= 80 ? theme.success : score >= 50 ? theme.accent : theme.error
+        return <span style={{ color, fontWeight: 600 }}>{score}%</span>
+      },
+    },
+    { key: 'id', label: 'Actions', width: 80,
+      render: (_, row) => (
+        <button onClick={() => setConfirm(row)} title="Remove"
+          style={{ background: 'none', border: 'none', color: theme.error, cursor: 'pointer' }}>
           <MdDelete size={18} />
         </button>
-      ) },
+      ),
+    },
   ]
 
   return (
     <div className="fade-in" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600 }}>Accounts</h2>
-        <FormButton>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <MdAdd size={16} /> Add Account
-          </span>
+        <FormButton onClick={() => setShowAdd(true)}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MdAdd size={16} /> Add Account</span>
         </FormButton>
       </div>
 
-      <div style={{ background: theme.bgMedium, border: `1px solid ${theme.bgLight}`, borderRadius: 12, overflow: 'hidden' }}>
-        <DataTable columns={columns} rows={accounts} keyField="id" emptyMsg="No accounts found." pageSize={10} />
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+          <MdSearch size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: theme.textMuted }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or phone…"
+            style={{ width: '100%', paddingLeft: 32, padding: '8px 12px 8px 32px', background: theme.bgMedium, border: `1px solid ${theme.bgLight}`, borderRadius: 8, color: theme.text, fontSize: 13, outline: 'none' }}
+          />
+        </div>
+        <FormSelect value={filter} onChange={(e) => setFilter(e.target.value)} options={STATUS_FILTER_OPTIONS} style={{ width: 150 }} />
       </div>
+
+      <div style={{ background: theme.bgMedium, border: `1px solid ${theme.bgLight}`, borderRadius: 12, overflow: 'hidden' }}>
+        <DataTable columns={columns} rows={visible} keyField="id" emptyMsg={loading ? 'Loading…' : 'No accounts found.'} pageSize={10} />
+      </div>
+
+      {showAdd && <AddAccountModal onClose={() => setShowAdd(false)} onSave={handleAdd} />}
+      {confirm && (
+        <ConfirmModal
+          isOpen={true}
+          message={`Remove account "${confirm.name ?? confirm.phone}"? This cannot be undone.`}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   )
 }

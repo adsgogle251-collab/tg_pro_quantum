@@ -13,6 +13,7 @@ from app.api.routes import auth, clients, accounts, groups, campaigns, broadcast
 from app.api.routes import account_groups
 from app.api.routes import phase3_broadcast
 from app.api.routes import admin, audit, exports, webhooks
+from app.api.routes import profiles, settings as user_settings, notifications
 from app.utils.logger import get_logger
 from app.websocket_manager import ws_manager
 
@@ -71,6 +72,9 @@ app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(audit.router, prefix=API_PREFIX)
 app.include_router(exports.router, prefix=API_PREFIX)
 app.include_router(webhooks.router, prefix=API_PREFIX)
+app.include_router(profiles.router, prefix=API_PREFIX)
+app.include_router(user_settings.router, prefix=API_PREFIX)
+app.include_router(notifications.router, prefix=API_PREFIX)
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────
