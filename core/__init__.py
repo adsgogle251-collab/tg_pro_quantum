@@ -94,6 +94,9 @@ from . import help_manager
 from . import scheduler_24h  # ✅ 24/7 scheduler
 from . import report_generator  # ✅ Auto report generator
 
+# === BROADCAST MANAGER ===
+from . import broadcast_manager as _broadcast_manager_module
+
 # === ENTERPRISE MODULES ===
 from . import account_group_manager  # ✅ Account group pools
 
@@ -130,6 +133,7 @@ from .security_ultimate import security_ultimate  # instance
 from .scheduler_24h import scheduler_24h  # ✅ 24/7 scheduler instance
 from .report_generator import report_generator  # ✅ Report generator instance
 from .account_group_manager import account_group_manager  # ✅ Account group manager instance
+from .broadcast_manager import broadcast_manager  # ✅ Broadcast manager instance
 
 # === IMPORT UTILITY FUNCTIONS ===
 from .utils import (
@@ -197,6 +201,7 @@ __all__ = [
     # === PHASE 10 Modules & Instances ===
     "scheduler_24h",  # ✅ 24/7 scheduler
     "report_generator",  # ✅ Auto report generator
+    "broadcast_manager",  # ✅ Broadcast manager
 
     # === Enterprise Modules & Instances ===
     "account_group_manager",  # ✅ Account group pools
