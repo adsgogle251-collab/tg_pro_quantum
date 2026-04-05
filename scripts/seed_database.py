@@ -105,14 +105,14 @@ async def seed(db: AsyncSession) -> None:
         select(License).where(License.client_id == admin.id)
     )
     if not existing_license.scalar_one_or_none():
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         import secrets as _secrets
         lic = License(
             key=_secrets.token_urlsafe(32),
             client_id=admin.id,
             tier=LicenseTier.enterprise,
             status=LicenseStatus.active,
-            expires_at=datetime.utcnow() + timedelta(days=365),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=365),
             max_accounts=100,
             max_campaigns=50,
         )
