@@ -5,16 +5,19 @@ import {
   MdPeople,
   MdBarChart,
   MdSettings,
+  MdAdminPanelSettings,
 } from 'react-icons/md'
 import theme from '../styles/theme'
 
-const navItems = [
+const baseNavItems = [
   { to: '/',           label: 'Dashboard',  Icon: MdDashboard },
   { to: '/campaigns',  label: 'Campaigns',  Icon: MdCampaign  },
   { to: '/accounts',   label: 'Accounts',   Icon: MdPeople    },
   { to: '/analytics',  label: 'Analytics',  Icon: MdBarChart  },
   { to: '/settings',   label: 'Settings',   Icon: MdSettings  },
 ]
+
+const adminNavItem = { to: '/admin', label: 'Admin Panel', Icon: MdAdminPanelSettings }
 
 const styles = {
   sidebar: {
@@ -62,6 +65,12 @@ const styles = {
 }
 
 export default function Sidebar() {
+  const user = (() => {
+    try { return JSON.parse(localStorage.getItem('user') ?? 'null') } catch { return null }
+  })()
+  const isAdmin = user?.is_admin === true || user?.role === 'admin'
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems
+
   return (
     <aside style={styles.sidebar}>
       <div style={styles.logo}>
