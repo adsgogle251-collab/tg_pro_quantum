@@ -1,10 +1,11 @@
 """
 TG PRO QUANTUM - Telegram Account Management Routes
 """
-from typing import List
+from math import ceil
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, delete
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
@@ -14,6 +15,7 @@ from app.models.schemas import (
     AccountCreate, AccountResponse, AccountUpdate, MessageResponse,
     TelegramLoginRequest, TelegramLoginResponse, TelegramVerifyRequest,
     AccountFeatureResponse, AccountGroupLinkResponse,
+    PaginatedResponse,
 )
 from app.core.account_manager import account_manager as acct_mgr
 
@@ -27,15 +29,49 @@ def _require_owns(account: TelegramAccount, client: Client) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-@router.get("/", response_model=List[AccountResponse])
+@router.get("/")
 async def list_accounts(
+    page: Optional[int] = Query(None, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    search: Optional[str] = Query(None),
+    account_status: Optional[str] = Query(None, alias="status"),
     db: AsyncSession = Depends(get_db),
     current_client: Client = Depends(get_current_client),
 ):
-    """List accounts belonging to the current client."""
-    result = await db.execute(
-        select(TelegramAccount).where(TelegramAccount.client_id == current_client.id)
-    )
+    """List accounts belonging to the current client.
+
+    When *page* is provided returns a paginated envelope; otherwise returns a plain list.
+    """
+    query = select(TelegramAccount).where(TelegramAccount.client_id == current_client.id)
+    count_query = select(func.count(TelegramAccount.id)).where(TelegramAccount.client_id == current_client.id)
+
+    if search:
+        like = f"%{search}%"
+        query = query.where(or_(TelegramAccount.name.ilike(like), TelegramAccount.phone.ilike(like)))
+        count_query = count_query.where(or_(TelegramAccount.name.ilike(like), TelegramAccount.phone.ilike(like)))
+
+    if account_status:
+        try:
+            status_val = AccountStatus(account_status)
+            query = query.where(TelegramAccount.status == status_val)
+            count_query = count_query.where(TelegramAccount.status == status_val)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {account_status}")
+
+    if page is not None:
+        total = (await db.execute(count_query)).scalar() or 0
+        offset = (page - 1) * per_page
+        result = await db.execute(query.offset(offset).limit(per_page))
+        items = result.scalars().all()
+        return PaginatedResponse(
+            items=[AccountResponse.model_validate(a) for a in items],
+            total=total,
+            page=page,
+            per_page=per_page,
+            pages=ceil(total / per_page) if per_page else 1,
+        )
+
+    result = await db.execute(query)
     return result.scalars().all()
 
 

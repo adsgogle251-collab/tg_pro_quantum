@@ -1,35 +1,72 @@
+/* ─── CSS Reset ──────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* ─── CSS Variables — Dark (default) ─────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --color-primary:    #00D9FF;
+  --color-secondary:  #7B2CBF;
+  --color-accent:     #FF6B35;
+  --color-success:    #00FF41;
+  --color-warning:    #FFB800;
+  --color-error:      #FF006E;
+  --color-bg-dark:    #0A0E27;
+  --color-bg-medium:  #1A1F3A;
+  --color-bg-light:   #252D4A;
+  --color-text:       #E0E0FF;
+  --color-text-muted: #9099B7;
+  --shadow-card:      0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* ─── CSS Variables — Light ──────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-primary:    #0099BB;
+  --color-secondary:  #6020AA;
+  --color-accent:     #E05520;
+  --color-success:    #008A24;
+  --color-warning:    #CC9200;
+  --color-error:      #CC004A;
+  --color-bg-dark:    #F0F2FA;
+  --color-bg-medium:  #FFFFFF;
+  --color-bg-light:   #E4E8F5;
+  --color-text:       #1A1D2E;
+  --color-text-muted: #5A6080;
+  --shadow-card:      0 4px 24px rgba(0,0,0,0.10);
+}
+
 body {
-  background-color: #0A0E27;
-  color: #E0E0FF;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1A1F3A;
+  background: var(--color-bg-medium);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #252D4A;
+  background: var(--color-bg-light);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00D9FF44;
+  background: var(--color-primary);
+  opacity: 0.3;
 }
 
+/* ─── Keyframe Animations ────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -45,14 +82,116 @@ body {
   50%       { opacity: 0.4; }
 }
 
-.fade-in  { animation: fadeIn  0.4s ease forwards; }
-.slide-in { animation: slideIn 0.3s ease forwards; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Utility Classes ────────────────────────────────────────────────────── */
+.fade-in   { animation: fadeIn  0.4s ease forwards; }
+.slide-in  { animation: slideIn 0.3s ease forwards; }
+.toast-slide-in { animation: toastIn 0.3s ease forwards; }
 
 a { color: inherit; text-decoration: none; }
-
 button { cursor: pointer; }
+table  { border-collapse: collapse; width: 100%; }
 
-table {
-  border-collapse: collapse;
-  width: 100%;
+/* ─── Spinner ────────────────────────────────────────────────────────────── */
+.spinner {
+  border: 3px solid rgba(0, 217, 255, 0.2);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+/* ─── Skeleton Loader ────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-light)  25%,
+    color-mix(in srgb, var(--color-bg-light) 70%, var(--color-primary) 30%) 50%,
+    var(--color-bg-light)  75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+/* ─── Modal Overlay ──────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-box {
+  background: var(--color-bg-medium);
+  border: 1px solid var(--color-bg-light);
+  border-radius: 14px;
+  padding: 28px 32px;
+  max-width: 460px;
+  width: 90%;
+  animation: fadeIn 0.2s ease forwards;
+  box-shadow: var(--shadow-card);
+}
+
+/* ─── Toast Container ────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--color-bg-medium);
+  min-width: 280px;
+  max-width: 400px;
+  pointer-events: all;
+  cursor: pointer;
+  animation: toastIn 0.3s ease forwards;
+}
+
+/* ─── Responsive Breakpoints ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+
+  .responsive-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-flex {
+    flex-direction: column !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .hide-sm { display: none !important; }
+}
+
+@media (min-width: 769px) {
+  .hide-desktop { display: none !important; }
 }

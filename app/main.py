@@ -12,6 +12,7 @@ from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.api.routes import auth, clients, accounts, groups, campaigns, broadcasts, analytics
 from app.api.routes import account_groups
 from app.api.routes import phase3_broadcast
+from app.api.routes import admin, audit, exports, webhooks
 from app.utils.logger import get_logger
 from app.websocket_manager import ws_manager
 
@@ -66,6 +67,10 @@ app.include_router(broadcasts.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(account_groups.router, prefix=API_PREFIX)
 app.include_router(phase3_broadcast.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
+app.include_router(audit.router, prefix=API_PREFIX)
+app.include_router(exports.router, prefix=API_PREFIX)
+app.include_router(webhooks.router, prefix=API_PREFIX)
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────

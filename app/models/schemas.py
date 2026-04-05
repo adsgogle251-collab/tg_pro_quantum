@@ -12,6 +12,7 @@ from app.models.database import (
     AccountStatus, BroadcastStatus, CampaignMode, CampaignStatus, ClientStatus, ClientPlan, OTPStatus,
     AccountFeature, AccountGroupLink,
     AccountGroupFeatureType, AccountGroupStatus,
+    LicenseTier, LicenseStatus,
 )
 
 
@@ -43,6 +44,18 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=255)
+    email: Optional[EmailStr] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = Field(None, min_length=8, max_length=128)
+
+
+class TOTPSetupResponse(BaseModel):
+    secret: str
+    uri: str
 
 
 # ── OTP ──────────────────────────────────────────────────────────────────────
@@ -336,10 +349,11 @@ class MessageResponse(BaseModel):
 
 
 class PaginatedResponse(BaseModel):
+    items: List[Any]
     total: int
     page: int
     per_page: int
-    items: List[Any]
+    pages: int
 
 
 # ── Account Groups (Enterprise) ───────────────────────────────────────────────
@@ -560,3 +574,74 @@ class BroadcastCampaignCreate(BaseModel):
     max_per_day: int = Field(500, ge=1)
     rotate_every: int = Field(20, ge=1)
     safety_flags: Optional[Dict[str, Any]] = None
+
+
+# ── License ───────────────────────────────────────────────────────────────────
+
+class LicenseCreate(BaseModel):
+    tier: LicenseTier = LicenseTier.starter
+    client_id: Optional[int] = None
+    max_accounts: int = Field(5, ge=1)
+    max_campaigns: int = Field(10, ge=1)
+    expires_at: Optional[datetime] = None
+
+
+class LicenseUpdate(BaseModel):
+    tier: Optional[LicenseTier] = None
+    status: Optional[LicenseStatus] = None
+    client_id: Optional[int] = None
+    max_accounts: Optional[int] = Field(None, ge=1)
+    max_campaigns: Optional[int] = Field(None, ge=1)
+    expires_at: Optional[datetime] = None
+
+
+class LicenseResponse(OrmBase):
+    id: int
+    key: str
+    tier: LicenseTier
+    status: LicenseStatus
+    client_id: Optional[int]
+    max_accounts: int
+    max_campaigns: int
+    expires_at: Optional[datetime]
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+# ── Admin Client ──────────────────────────────────────────────────────────────
+
+class AdminClientPlanUpdate(BaseModel):
+    plan_type: Optional[ClientPlan] = None
+    status: Optional[ClientStatus] = None
+    usage_limit_monthly: Optional[int] = Field(None, ge=0)
+
+
+# ── Audit Log ─────────────────────────────────────────────────────────────────
+
+class AuditLogResponse(OrmBase):
+    id: int
+    client_id: Optional[int]
+    action: str
+    resource_type: Optional[str]
+    resource_id: Optional[str]
+    details: Optional[Dict[str, Any]]
+    ip_address: Optional[str]
+    created_at: datetime
+
+
+# ── Webhook ───────────────────────────────────────────────────────────────────
+
+class WebhookCreate(BaseModel):
+    url: str = Field(..., max_length=500)
+    events: List[str] = Field(default_factory=list)
+    secret: Optional[str] = Field(None, max_length=64)
+
+
+class WebhookResponse(OrmBase):
+    id: int
+    client_id: int
+    url: str
+    events: List[str]
+    secret: Optional[str]
+    is_active: bool
+    created_at: datetime

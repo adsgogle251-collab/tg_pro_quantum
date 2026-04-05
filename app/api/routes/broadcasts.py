@@ -105,6 +105,9 @@ async def stop_broadcast(
         raise HTTPException(status_code=404, detail="Campaign not found")
     _require_owns(campaign, current_client)
 
+    if campaign.status not in (CampaignStatus.running, CampaignStatus.paused):
+        raise HTTPException(status_code=409, detail="Campaign is not running or paused")
+
     await broadcast_engine.stop_campaign(campaign_id)
     campaign.status = CampaignStatus.failed
     await db.flush()

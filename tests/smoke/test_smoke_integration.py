@@ -160,7 +160,7 @@ class TestSmokeSafetyFeatures:
             "delay_min": 27.0,
             "delay_max": 33.0,
         }
-        r = await client.post("/api/v1/campaigns/"  json=payload, headers=headers)
+        r = await client.post("/api/v1/campaigns/", json=payload, headers=headers)
         assert r.status_code in (200, 201)
         data = r.json()
         assert data["delay_min"] == 27.0
@@ -196,7 +196,7 @@ class TestSmokeErrorRecovery:
         c = await create_test_client(db_session, "er_smoke2")
         headers = make_auth_headers(c)
         r = await client.post(
-            "/api/v1/campaigns/" 
+            "/api/v1/campaigns/",
             content=b"not-json",
             headers={**headers, "Content-Type": "application/json"},
         )
@@ -209,5 +209,5 @@ class TestSmokeErrorRecovery:
         """Campaign creation without required fields returns 422."""
         c = await create_test_client(db_session, "er_smoke3")
         headers = make_auth_headers(c)
-        r = await client.post("/api/v1/campaigns/"  json={}, headers=headers)
+        r = await client.post("/api/v1/campaigns/", json={}, headers=headers)
         assert r.status_code == 422

@@ -21,6 +21,19 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+# In-memory token blacklist (used for logout)
+_token_blacklist: set[str] = set()
+
+
+def blacklist_token(token: str) -> None:
+    """Add a token to the blacklist."""
+    _token_blacklist.add(token)
+
+
+def is_token_blacklisted(token: str) -> bool:
+    """Check whether a token has been blacklisted."""
+    return token in _token_blacklist
+
 # ── Password helpers ──────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
@@ -78,6 +91,12 @@ async def get_current_client(
         payload = decode_token(credentials.credentials)
         if payload.get("type") != "access":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        if is_token_blacklisted(credentials.credentials):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         client_id = int(payload["sub"])
         result = await db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()

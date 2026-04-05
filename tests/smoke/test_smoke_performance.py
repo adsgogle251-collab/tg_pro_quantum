@@ -61,7 +61,7 @@ class TestSmokeAPIResponseTime:
         headers = make_auth_headers(c)
 
         start = time.monotonic()
-        response = await client.get("/api/v1/campaigns/"  headers=headers)
+        response = await client.get("/api/v1/campaigns/", headers=headers)
         ms = elapsed_ms(start)
         assert response.status_code == 200
         assert ms < MAX_API_MS, f"Campaigns list too slow: {ms:.1f}ms > {MAX_API_MS}ms"
@@ -160,7 +160,7 @@ class TestSmokeConsecutiveRequests:
         headers = make_auth_headers(c)
 
         for _ in range(20):
-            r = await client.get("/api/v1/campaigns/"  headers=headers)
+            r = await client.get("/api/v1/campaigns/", headers=headers)
             assert r.status_code == 200
 
         # Basic sanity: if we reach here without OOM/exception, memory is stable.
