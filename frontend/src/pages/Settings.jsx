@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FormInput, FormButton, FormSelect } from '../components/Forms'
 import { useToast } from '../context/ToastContext'
 import { getSettings, updateSettings, getPreferences, updatePreferences } from '../services/api'
@@ -57,6 +58,7 @@ function Toggle({ label, description, checked, onChange }) {
 
 export default function Settings() {
   const { showToast } = useToast()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('General')
   const [settings, setSettings]   = useState({})
   const [prefs, setPrefs]         = useState({})
@@ -159,7 +161,7 @@ export default function Settings() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Section title="API & Integrations">
             <p style={{ fontSize: 13, color: theme.textMuted }}>Advanced API settings are managed through the Profile page API Keys section.</p>
-            <FormButton variant="ghost" onClick={() => window.location.href = '/profile'}>Go to Profile → API Keys</FormButton>
+        <FormButton onClick={() => navigate('/profile')} variant="ghost">Go to Profile → API Keys</FormButton>
           </Section>
           <Section title="Telegram API Configuration">
             <FormInput label="Default API ID" placeholder="Leave blank to use per-account API ID" value={settings.default_api_id ?? ''} onChange={(e) => setSettings((s) => ({ ...s, default_api_id: e.target.value }))} type="number" />

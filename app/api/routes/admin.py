@@ -286,13 +286,15 @@ async def delete_user(
     admin: Client = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a user account (admin only). Cannot delete own account."""
+    """Delete a user account (admin only). Cannot delete own account or other admin accounts."""
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     result = await db.execute(select(Client).where(Client.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot delete another admin account")
     await db.delete(user)
     return MessageResponse(message="User deleted")
 

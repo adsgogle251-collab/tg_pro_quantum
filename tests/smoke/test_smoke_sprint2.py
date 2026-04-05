@@ -359,9 +359,10 @@ class TestNotificationsEndpoints:
 
     @pytest.mark.asyncio
     async def test_mark_notification_read(self, client: AsyncClient, db_session: AsyncSession):
-        """PATCH /notifications/{id}/read returns success."""
+        """PATCH /notifications/{id}/read returns success (endpoint is idempotent)."""
         user = await create_test_client(db_session, "notif2")
         headers = make_auth_headers(user)
-        resp = await client.patch("/api/v1/notifications/1/read", headers=headers)
+        # The endpoint is a no-op / idempotent; any numeric ID should return 200
+        resp = await client.patch("/api/v1/notifications/999/read", headers=headers)
         assert resp.status_code == 200
         assert "message" in resp.json()

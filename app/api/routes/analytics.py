@@ -115,7 +115,7 @@ async def analytics_dashboard(
         )
     ).scalar() or 0
 
-    success_rate = round(total_sent / max(total_sent + total_failed, 1) * 100, 2)
+    success_rate = round((total_sent / max(total_sent + total_failed, 1)) * 100, 2)
 
     return {
         "total_campaigns": total_campaigns,
