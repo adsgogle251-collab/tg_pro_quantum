@@ -9,16 +9,16 @@ import Settings   from './pages/Settings'
 import Profile    from './pages/Profile'
 import Admin      from './pages/Admin'
 import Login      from './pages/Login'
+import Register   from './pages/Register'
+import NotFound   from './pages/NotFound'
+import Forbidden  from './pages/Forbidden'
+import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import { ToastProvider } from './context/ToastContext'
 import { I18nProvider } from './context/I18nContext'
+import { AuthProvider } from './contexts/AuthContext'
 import './styles/globals.css'
-
-function RequireAuth({ children }) {
-  const token = localStorage.getItem('auth_token')
-  if (!token) return <Navigate to="/login" replace />
-  return children
-}
 
 function AppShell() {
   const { theme } = useTheme()
@@ -26,31 +26,36 @@ function AppShell() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
-        <Route path="/login" element={<Login />} />
+        <Route path="/login"    element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forbidden" element={<Forbidden />} />
 
         {/* Protected — wrap all dashboard routes */}
         <Route
           path="/*"
           element={
-            <RequireAuth>
+            <ProtectedRoute>
               <div style={{ display: 'flex', height: '100vh', background: theme.bgDark, overflow: 'hidden' }}>
                 <Sidebar />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <Navbar />
                   <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-                    <Routes>
-                      <Route path="/"           element={<Dashboard />}  />
-                      <Route path="/campaigns"  element={<Campaigns />}  />
-                      <Route path="/accounts"   element={<Accounts />}   />
-                      <Route path="/analytics"  element={<Analytics />}  />
-                      <Route path="/settings"   element={<Settings />}   />
-                      <Route path="/profile"    element={<Profile />}    />
-                      <Route path="/admin"      element={<Admin />}      />
-                    </Routes>
+                    <ErrorBoundary>
+                      <Routes>
+                        <Route path="/"           element={<Dashboard />}  />
+                        <Route path="/campaigns"  element={<Campaigns />}  />
+                        <Route path="/accounts"   element={<Accounts />}   />
+                        <Route path="/analytics"  element={<Analytics />}  />
+                        <Route path="/settings"   element={<Settings />}   />
+                        <Route path="/profile"    element={<Profile />}    />
+                        <Route path="/admin"      element={<AdminRoute><Admin /></AdminRoute>} />
+                        <Route path="*"           element={<NotFound />}   />
+                      </Routes>
+                    </ErrorBoundary>
                   </main>
                 </div>
               </div>
-            </RequireAuth>
+            </ProtectedRoute>
           }
         />
       </Routes>
@@ -63,7 +68,9 @@ export default function App() {
     <I18nProvider>
       <ThemeProvider>
         <ToastProvider>
-          <AppShell />
+          <AuthProvider>
+            <AppShell />
+          </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </I18nProvider>

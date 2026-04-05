@@ -29,6 +29,22 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        errors = []
+        if not any(c.isupper() for c in v):
+            errors.append("at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            errors.append("at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            errors.append("at least one digit")
+        if not any(c in "!@#$%^&*()_+-=[]{}|;':\",./<>?" for c in v):
+            errors.append("at least one special character")
+        if errors:
+            raise ValueError("Password must contain " + ", ".join(errors))
+        return v
+
 
 class LoginRequest(BaseModel):
     email: EmailStr

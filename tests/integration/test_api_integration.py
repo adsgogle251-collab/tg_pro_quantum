@@ -45,7 +45,7 @@ class TestAuthFlow:
             json={
                 "name": "Test User",
                 "email": "register_login@test.com",
-                "password": "securepassword",
+                "password": "SecurePass1!",
             },
         )
         assert resp.status_code == 201
@@ -61,7 +61,7 @@ class TestAuthFlow:
             json={
                 "name": "Fail User",
                 "email": "faillogin@test.com",
-                "password": "correctpass",
+                "password": "CorrectPass1!",
             },
         )
         resp = await client.post(
@@ -157,7 +157,7 @@ class TestClientToBroadcastWorkflow:
             json={
                 "name": "Workflow Client",
                 "email": "workflow_client@example.com",
-                "password": "securepassword",
+                "password": "SecurePass1!",
                 "plan_type": "pro",
             },
             headers=make_auth_headers(admin),

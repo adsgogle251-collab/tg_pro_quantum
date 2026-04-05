@@ -108,7 +108,19 @@ class LoginDialog:
         tk.Button(form_frame, text="🔐 Login", command=self._login,
                   bg=COLORS["primary"], fg="white", font=("Inter", 14, "bold"),
                   padx=40, pady=12).pack(pady=20)
-        
+
+        # Register link
+        reg_frame = tk.Frame(form_frame, bg=COLORS["bg_medium"])
+        reg_frame.pack(pady=(0, 10))
+        tk.Label(reg_frame, text="Don't have an account? ",
+                 fg=COLORS["text_muted"], bg=COLORS["bg_medium"],
+                 font=FONTS["small"]).pack(side="left")
+        reg_link = tk.Label(reg_frame, text="Register", fg=COLORS["primary"],
+                             bg=COLORS["bg_medium"], font=FONTS["small"],
+                             cursor="hand2")
+        reg_link.pack(side="left")
+        reg_link.bind("<Button-1>", lambda e: self._open_register())
+
         # Footer
         tk.Label(self.dialog, text="Default: admin@tgproquantum.com / admin123",
                 fg=COLORS["text_muted"], bg=COLORS["bg_dark"],
@@ -161,6 +173,33 @@ class LoginDialog:
             log(f"Login error: {e}", "error")
             messagebox.showerror("Error", f"Login failed: {str(e)}", parent=self.dialog)
     
+    def _open_register(self):
+        """Open the register window."""
+        try:
+            from gui.register_window import RegisterWindow
+            if hasattr(self, "dialog"):
+                self.dialog.withdraw()
+            reg = RegisterWindow(self.parent, on_success=self._on_register_success)
+            reg.show()
+            if hasattr(self, "dialog"):
+                try:
+                    self.dialog.deiconify()
+                except Exception:
+                    pass
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open register window:\n{e}",
+                                 parent=self.dialog if hasattr(self, "dialog") else self.parent)
+
+    def _on_register_success(self):
+        """Called when registration succeeds."""
+        if hasattr(self, "dialog"):
+            try:
+                self.dialog.deiconify()
+                messagebox.showinfo("Register", "Account created! You can now log in.",
+                                    parent=self.dialog)
+            except Exception:
+                pass
+
     def show(self):
         """Show dialog and return result"""
         if hasattr(self, 'dialog'):

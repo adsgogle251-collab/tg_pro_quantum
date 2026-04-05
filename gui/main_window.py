@@ -126,7 +126,8 @@ class MainWindow:
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         
-        # All tabs (23 total) - (label, notebook_tab_index)
+        # All tabs - (label, notebook_tab_index)
+        # Base tabs visible to all users
         buttons = [
             ("📊 Dasbor", 0),
             ("📂 Account Groups", 22),
@@ -142,16 +143,35 @@ class MainWindow:
             ("🤝 CRM", 10),
             ("💳 Tagihan", 11),
             ("📈 Kamp. Dashboard", 1),
-            ("🔒 Keamanan", 12),
-            ("👥 Pengguna", 13),
-            ("🎨 Label Putih", 14),
-            ("📋 GDPR", 15),
             ("⚙️ Pengaturan", 16),
             ("📝 Log", 17),
             ("🛠️ Alat", 18),
             ("👤 Portal", 20),
             ("❓ Bantuan", 21),
         ]
+
+        # Admin-only tabs
+        admin_buttons = [
+            ("🔒 Keamanan", 12),
+            ("👥 Pengguna", 13),
+            ("🎨 Label Putih", 14),
+            ("📋 GDPR", 15),
+        ]
+
+        # Check if current user is admin
+        current_user = get_current_user()
+        is_admin = (
+            current_user is not None
+            and (
+                current_user.get("is_admin") is True
+                or current_user.get("role") == "admin"
+            )
+        )
+
+        if is_admin:
+            # Insert admin separator + admin buttons
+            buttons.append(("─── Admin Panel ───", -1))  # separator (non-clickable)
+            buttons.extend(admin_buttons)
         
         # Map from notebook tab index → sidebar button widget
         self._tab_btn_map = {}
@@ -159,11 +179,19 @@ class MainWindow:
         for text, tab_index in buttons:
             btn_frame = tk.Frame(scrollable_frame, bg="#0f3460")
             btn_frame.pack(fill="x", pady=1)
-            
-            btn = tk.Button(btn_frame, text=f"  {text}", 
+
+            if tab_index == -1:
+                # Separator / section label — not clickable
+                tk.Label(btn_frame, text=text,
+                         font=("Segoe UI", 9, "bold"),
+                         bg="#0f3460", fg="#00d9ff",
+                         anchor="w", padx=20, pady=6).pack(fill="x")
+                continue
+
+            btn = tk.Button(btn_frame, text=f"  {text}",
                             font=("Segoe UI", 11),
                             bg="#0f3460", fg="#888888",
-                            activebackground="#00d9ff", 
+                            activebackground="#00d9ff",
                             activeforeground="#000000",
                             bd=0, anchor="w", padx=20, pady=12,
                             command=lambda i=tab_index: self._switch_tab(i))

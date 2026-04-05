@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { MdLock, MdEmail, MdVisibility, MdVisibilityOff } from 'react-icons/md'
 import { login } from '../services/api'
 import { useToast } from '../context/ToastContext'
@@ -182,6 +182,13 @@ export default function Login() {
             {loading ? 'Signing in…' : '🔐 Sign In'}
           </button>
         </form>
+
+        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: theme.textMuted }}>
+          Don't have an account?{' '}
+          <Link to="/register" style={{ color: theme.primary, textDecoration: 'none', fontWeight: 600 }}>
+            Register
+          </Link>
+        </div>
       </div>
     </div>
   )
