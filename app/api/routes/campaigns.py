@@ -1,17 +1,18 @@
 """
 TG PRO QUANTUM - Campaign CRUD Routes
 """
-from typing import List
+from math import ceil
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
 from app.database import get_db
 from app.models.database import Campaign, CampaignStatus, Client
 from app.models.schemas import (
-    CampaignCreate, CampaignResponse, CampaignUpdate, MessageResponse,
+    CampaignCreate, CampaignResponse, CampaignUpdate, MessageResponse, PaginatedResponse,
 )
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
@@ -22,19 +23,49 @@ def _require_owns(campaign: Campaign, client: Client) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-@router.get("/", response_model=List[CampaignResponse])
+@router.get("/")
 async def list_campaigns(
-    status_filter: str = Query(None, alias="status"),
+    page: Optional[int] = Query(None, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    search: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
     db: AsyncSession = Depends(get_db),
     current_client: Client = Depends(get_current_client),
 ):
-    """List campaigns for the current client."""
+    """List campaigns for the current client.
+
+    When *page* is provided returns a paginated envelope; otherwise returns a plain list.
+    """
     query = select(Campaign).where(Campaign.client_id == current_client.id)
+    count_query = select(func.count(Campaign.id)).where(Campaign.client_id == current_client.id)
+
+    if search:
+        like = f"%{search}%"
+        query = query.where(Campaign.name.ilike(like))
+        count_query = count_query.where(Campaign.name.ilike(like))
+
     if status_filter:
         try:
-            query = query.where(Campaign.status == CampaignStatus(status_filter))
+            sv = CampaignStatus(status_filter)
+            query = query.where(Campaign.status == sv)
+            count_query = count_query.where(Campaign.status == sv)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+
+    if page is not None:
+        total = (await db.execute(count_query)).scalar() or 0
+        offset = (page - 1) * per_page
+        result = await db.execute(query.order_by(Campaign.created_at.desc()).offset(offset).limit(per_page))
+        items = result.scalars().all()
+        from math import ceil
+        return PaginatedResponse(
+            items=[CampaignResponse.model_validate(c) for c in items],
+            total=total,
+            page=page,
+            per_page=per_page,
+            pages=ceil(total / per_page) if per_page else 1,
+        )
+
     result = await db.execute(query.order_by(Campaign.created_at.desc()))
     return result.scalars().all()
 

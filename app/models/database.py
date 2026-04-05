@@ -86,6 +86,8 @@ class Client(Base):
     usage_limit_monthly = Column(Integer, default=10000)
     current_usage_monthly = Column(Integer, default=0)
     webhook_url = Column(String(512), nullable=True)
+    totp_secret = Column(String(32), nullable=True)
+    totp_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -216,13 +218,13 @@ class AuditLog(Base):
     """Immutable audit trail."""
     __tablename__ = "audit_logs"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
-    action = Column(String(255), nullable=False)
-    resource_type = Column(String(100))
-    resource_id = Column(Integer)
-    details = Column(JSON, default=dict)
-    ip_address = Column(String(45))
+    action = Column(String(100), nullable=False)
+    resource_type = Column(String(50), nullable=True)
+    resource_id = Column(String(50), nullable=True)
+    details = Column(JSON, nullable=True)
+    ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="audit_logs")
@@ -453,3 +455,50 @@ Campaign.rotate_every = Column(Integer, default=20)  # rotate account every N me
 Campaign.link_url = Column(String(512), nullable=True)
 Campaign.timing_start = Column(String(8), nullable=True)   # "08:00"
 Campaign.timing_end = Column(String(8), nullable=True)     # "22:00"
+
+
+# ── License & Webhook Tables ──────────────────────────────────────────────────
+
+class LicenseTier(str, enum.Enum):
+    starter = "starter"
+    pro = "pro"
+    enterprise = "enterprise"
+
+
+class LicenseStatus(str, enum.Enum):
+    active = "active"
+    expired = "expired"
+    revoked = "revoked"
+
+
+class License(Base):
+    """License key that can be assigned to a client."""
+    __tablename__ = "licenses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(64), unique=True, nullable=False, index=True)
+    tier = Column(Enum(LicenseTier), default=LicenseTier.starter)
+    status = Column(Enum(LicenseStatus), default=LicenseStatus.active)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    max_accounts = Column(Integer, default=5)
+    max_campaigns = Column(Integer, default=10)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    client = relationship("Client", backref="licenses")
+
+
+class Webhook(Base):
+    """Outgoing webhook subscriptions for a client."""
+    __tablename__ = "webhooks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    url = Column(String(500), nullable=False)
+    events = Column(JSON, default=list)
+    secret = Column(String(64), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", backref="webhooks")

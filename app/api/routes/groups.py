@@ -1,17 +1,18 @@
 """
 TG PRO QUANTUM - Group Management Routes
 """
-from typing import List
+from math import ceil
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
 from app.core.group_manager import group_manager
 from app.database import get_db
 from app.models.database import Client, Group
-from app.models.schemas import GroupCreate, GroupResponse, GroupUpdate, MessageResponse
+from app.models.schemas import GroupCreate, GroupResponse, GroupUpdate, MessageResponse, PaginatedResponse
 
 router = APIRouter(prefix="/groups", tags=["Groups"])
 
@@ -21,16 +22,45 @@ def _require_owns(group: Group, client: Client) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-@router.get("/", response_model=List[GroupResponse])
+@router.get("/")
 async def list_groups(
+    page: Optional[int] = Query(None, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    search: Optional[str] = Query(None),
     active_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_client: Client = Depends(get_current_client),
 ):
-    """List groups for the current client."""
+    """List groups for the current client.
+
+    When *page* is provided returns a paginated envelope; otherwise returns a plain list.
+    """
     query = select(Group).where(Group.client_id == current_client.id)
+    count_query = select(func.count(Group.id)).where(Group.client_id == current_client.id)
+
     if active_only:
         query = query.where(Group.is_active.is_(True))
+        count_query = count_query.where(Group.is_active.is_(True))
+
+    if search:
+        like = f"%{search}%"
+        query = query.where(or_(Group.username.ilike(like), Group.title.ilike(like)))
+        count_query = count_query.where(or_(Group.username.ilike(like), Group.title.ilike(like)))
+
+    if page is not None:
+        total = (await db.execute(count_query)).scalar() or 0
+        offset = (page - 1) * per_page
+        result = await db.execute(query.offset(offset).limit(per_page))
+        items = result.scalars().all()
+        from math import ceil
+        return PaginatedResponse(
+            items=[GroupResponse.model_validate(g) for g in items],
+            total=total,
+            page=page,
+            per_page=per_page,
+            pages=ceil(total / per_page) if per_page else 1,
+        )
+
     result = await db.execute(query)
     return result.scalars().all()
 

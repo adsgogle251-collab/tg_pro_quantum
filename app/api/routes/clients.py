@@ -1,31 +1,60 @@
 """
 TG PRO QUANTUM - Client Management Routes (Admin)
 """
-from typing import List, Optional
+import math
+from typing import Any, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client, require_admin
 from app.database import get_db
 from app.models.database import Client, Campaign, CampaignStatus, TelegramAccount, AccountGroup
-from app.models.schemas import ClientCreate, ClientResponse, ClientUpdate, ClientDashboard, MessageResponse
+from app.models.schemas import ClientCreate, ClientResponse, ClientUpdate, ClientDashboard, MessageResponse, PaginatedResponse
 from app.api.dependencies import hash_password
 from app.utils.helpers import generate_api_key
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 
-@router.get("/", response_model=List[ClientResponse])
+@router.get("/")
 async def list_clients(
+    page: Optional[int] = Query(None, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+    search: Optional[str] = Query(None),
+    # legacy skip/limit params kept for backward compatibility
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _admin: Client = Depends(require_admin),
 ):
-    """List all clients (admin only)."""
-    result = await db.execute(select(Client).offset(skip).limit(limit))
+    """List all clients (admin only).
+
+    When *page* is provided returns a paginated envelope; otherwise returns a plain list.
+    """
+    query = select(Client)
+    count_query = select(func.count(Client.id))
+    if search:
+        like = f"%{search}%"
+        query = query.where(or_(Client.name.ilike(like), Client.email.ilike(like)))
+        count_query = count_query.where(or_(Client.name.ilike(like), Client.email.ilike(like)))
+
+    if page is not None:
+        total = (await db.execute(count_query)).scalar() or 0
+        offset = (page - 1) * per_page
+        result = await db.execute(query.offset(offset).limit(per_page))
+        items = result.scalars().all()
+        return PaginatedResponse(
+            items=[ClientResponse.model_validate(c) for c in items],
+            total=total,
+            page=page,
+            per_page=per_page,
+            pages=math.ceil(total / per_page) if per_page else 1,
+        )
+
+    # Legacy list response
+    result = await db.execute(query.offset(skip).limit(limit))
     return result.scalars().all()
 
 
