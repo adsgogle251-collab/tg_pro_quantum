@@ -8,7 +8,12 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 
 # SQLite (used in tests) doesn't support pool_size / max_overflow.
-_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+# Normalize plain sqlite:// → sqlite+aiosqlite:// so the async driver is used.
+_db_url: str = settings.DATABASE_URL
+if _db_url.startswith("sqlite://") and not _db_url.startswith("sqlite+"):
+    _db_url = _db_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
+_is_sqlite = _db_url.startswith("sqlite")
 
 _engine_kwargs: dict = {"echo": settings.DEBUG}
 if _is_sqlite:
@@ -19,7 +24,7 @@ else:
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
 
-engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
+engine = create_async_engine(_db_url, **_engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
