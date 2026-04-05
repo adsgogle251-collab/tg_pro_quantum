@@ -32,10 +32,10 @@ args = [
 ]
 
 print("=" * 70)
-print("🔨 TG PRO QUANTUM - Building Windows .exe")
+print("Building TG PRO QUANTUM - Windows .exe")
 print("=" * 70)
 PyInstaller.__main__.run(args)
 print("=" * 70)
-print("✅ BUILD COMPLETE!")
-print(f"📦 Output: {output_dir / 'TG-PRO-QUANTUM.exe'}")
+print("BUILD COMPLETE!")
+print(f"Output: {output_dir / 'TG-PRO-QUANTUM.exe'}")
 print("=" * 70)
