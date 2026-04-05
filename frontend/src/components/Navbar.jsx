@@ -59,7 +59,7 @@ export default function Navbar() {
       await logout()
       addToast('Logged out successfully', 'success')
     } catch {
-      addToast('Logout failed. Please try again.', 'error')
+      // Silently ignore API errors — clear session and redirect anyway
     }
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')

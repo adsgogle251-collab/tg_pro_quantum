@@ -19,13 +19,14 @@ const navItems = [
 const styles = {
   sidebar: {
     width: 220,
-    minHeight: '100vh',
+    height: '100%',
     background: theme.bgMedium,
     borderRight: `1px solid ${theme.bgLight}`,
     display: 'flex',
     flexDirection: 'column',
     padding: '24px 0',
     flexShrink: 0,
+    overflowY: 'auto',
   },
   logo: {
     padding: '0 20px 28px',

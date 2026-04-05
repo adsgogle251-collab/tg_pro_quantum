@@ -186,6 +186,11 @@ table  { border-collapse: collapse; width: 100%; }
   .responsive-flex {
     flex-direction: column !important;
   }
+
+  /* Sidebar collapses on mobile */
+  aside {
+    display: none !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -194,4 +199,15 @@ table  { border-collapse: collapse; width: 100%; }
 
 @media (min-width: 769px) {
   .hide-desktop { display: none !important; }
+}
+
+/* ─── Layout helpers ─────────────────────────────────────────────────────── */
+html, body, #root {
+  height: 100%;
+}
+
+/* Ensure tables scroll horizontally inside their card containers */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
