@@ -134,7 +134,7 @@ class BroadcastProgressWidget(tk.Frame):
         self._pct_lbl.config(text=f"{pct:.0f}%")
 
         # Show first active account
-        if accs:
+        if accs and len(accs) > 0:
             self._active_lbl.config(text=f"📱 Active: {accs[0].get('name', '—')[:24]}")
 
         if done:

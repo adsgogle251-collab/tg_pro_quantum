@@ -823,7 +823,7 @@ class BroadcastTab:
         # Active account display
         if cur_acc:
             self.active_acc_lbl.config(text=f"📱 Active: {cur_acc[:20]}")
-        elif active_accounts:
+        elif active_accounts and len(active_accounts) > 0:
             self.active_acc_lbl.config(text=f"📱 Active: {active_accounts[0].get('name', '—')[:20]}")
         
         if total > 0:

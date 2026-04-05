@@ -394,7 +394,10 @@ class BroadcastManager:
             if not self.running:
                 break
 
-            # Pick account (round-robin or sequential)
+            # Pick account (round-robin or sequential) – guard against empty list
+            if not accounts:
+                log_error("BroadcastManager: accounts list became empty during broadcast")
+                break
             account = accounts[acc_idx % len(accounts)]
             if round_robin:
                 acc_idx += 1

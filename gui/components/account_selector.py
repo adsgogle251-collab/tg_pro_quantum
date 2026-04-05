@@ -134,7 +134,10 @@ class AccountSelectorWidget(tk.Frame):
             self._tree.tag_configure("inactive", foreground=MUTED)
             self._update_count()
         except Exception as exc:
-            pass  # Gracefully handle if account_manager not yet available
+            import logging
+            logging.getLogger(__name__).warning(
+                "AccountSelectorWidget.refresh: failed to load accounts: %s", exc
+            )
 
     # ── Event handlers ──────────────────────────────────────────────────────
 
