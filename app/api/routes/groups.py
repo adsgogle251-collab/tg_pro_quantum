@@ -52,7 +52,6 @@ async def list_groups(
         offset = (page - 1) * per_page
         result = await db.execute(query.offset(offset).limit(per_page))
         items = result.scalars().all()
-        from math import ceil
         return PaginatedResponse(
             items=[GroupResponse.model_validate(g) for g in items],
             total=total,

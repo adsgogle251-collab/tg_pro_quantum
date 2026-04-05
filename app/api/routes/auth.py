@@ -5,6 +5,7 @@ import secrets
 from datetime import timedelta
 from typing import List, Optional
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,7 +218,6 @@ async def setup_2fa(
     current_client: Client = Depends(get_current_client),
 ):
     """Generate a new TOTP secret and return the provisioning URI."""
-    import pyotp
     secret = pyotp.random_base32()
     current_client.totp_secret = secret
     await db.flush()
@@ -233,7 +233,6 @@ async def verify_2fa(
     current_client: Client = Depends(get_current_client),
 ):
     """Verify a TOTP code to enable 2FA."""
-    import pyotp
     code = body.get("code", "")
     if not current_client.totp_secret:
         raise HTTPException(status_code=400, detail="2FA setup not initiated. Call /auth/2fa/setup first.")
@@ -252,7 +251,6 @@ async def disable_2fa(
     current_client: Client = Depends(get_current_client),
 ):
     """Disable 2FA after verifying the current TOTP code."""
-    import pyotp
     code = body.get("code", "")
     if not current_client.totp_enabled or not current_client.totp_secret:
         raise HTTPException(status_code=400, detail="2FA is not enabled")

@@ -57,7 +57,6 @@ async def list_campaigns(
         offset = (page - 1) * per_page
         result = await db.execute(query.order_by(Campaign.created_at.desc()).offset(offset).limit(per_page))
         items = result.scalars().all()
-        from math import ceil
         return PaginatedResponse(
             items=[CampaignResponse.model_validate(c) for c in items],
             total=total,

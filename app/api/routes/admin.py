@@ -6,7 +6,7 @@ from math import ceil
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client, require_admin, hash_password
@@ -133,8 +133,8 @@ async def list_all_clients(
     count_query = select(func.count(Client.id))
     if search:
         like = f"%{search}%"
-        query = query.where(Client.name.ilike(like) | Client.email.ilike(like))
-        count_query = count_query.where(Client.name.ilike(like) | Client.email.ilike(like))
+        query = query.where(or_(Client.name.ilike(like), Client.email.ilike(like)))
+        count_query = count_query.where(or_(Client.name.ilike(like), Client.email.ilike(like)))
 
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0

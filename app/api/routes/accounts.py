@@ -63,7 +63,6 @@ async def list_accounts(
         offset = (page - 1) * per_page
         result = await db.execute(query.offset(offset).limit(per_page))
         items = result.scalars().all()
-        from math import ceil
         return PaginatedResponse(
             items=[AccountResponse.model_validate(a) for a in items],
             total=total,
