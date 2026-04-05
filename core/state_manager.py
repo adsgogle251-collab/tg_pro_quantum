@@ -45,6 +45,16 @@ class StateManager:
         return cls._state.get(event_type)
 
     @classmethod
+    def get(cls, key: str, default: Any = None) -> Any:
+        """Get state value with optional default"""
+        return cls._state.get(key, default)
+
+    @classmethod
+    def set(cls, key: str, value: Any) -> None:
+        """Set a state value directly"""
+        cls._state[key] = value
+
+    @classmethod
     def refresh_all(cls):
         """Emit refresh_all to all listeners"""
         cls.emit_state_change("refresh_all", {})

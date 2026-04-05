@@ -225,13 +225,13 @@ class AccountManager:
     
     def get_all_groups(self) -> Dict[str, List[str]]:
         self.account_groups = self.load_groups()
-        log(f"get_all_groups: returning {len(self.account_groups)} groups", "info")
+        log(f"get_all_groups: returning {len(self.account_groups)} groups", "debug")
         return self.account_groups.copy()
     
     def get_group_accounts(self, group_name: str) -> List[str]:
         groups = self.load_groups()
         accounts = groups.get(group_name, [])
-        log(f"get_group_accounts('{group_name}'): found {len(accounts)} accounts", "info")
+        log(f"get_group_accounts('{group_name}'): found {len(accounts)} accounts", "debug")
         return accounts.copy()
     
     def create_group(self, group_name: str) -> bool:
