@@ -5,6 +5,7 @@ import theme from '../styles/theme'
 import useRealtime from '../hooks/useRealtime'
 import { logout } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
+import { useToast } from '../context/ToastContext'
 
 const PAGE_TITLES = {
   '/':           'Dashboard',
@@ -32,6 +33,7 @@ export default function Navbar() {
   const navigate = useNavigate()
   const { connected } = useRealtime('ping')
   const { mode, toggleTheme } = useTheme()
+  const { addToast } = useToast()
 
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -53,7 +55,12 @@ export default function Navbar() {
   const notifCount = 3 // placeholder — replace with real data
 
   const handleLogout = async () => {
-    try { await logout() } catch { /* ignore */ }
+    try {
+      await logout()
+      addToast('Logged out successfully', 'success')
+    } catch {
+      addToast('Logout failed. Please try again.', 'error')
+    }
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')
     navigate('/login')
