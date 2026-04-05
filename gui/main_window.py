@@ -185,49 +185,55 @@ class MainWindow:
         self.connection_label.pack(side="left")
     
     # ═══════════════════════════════════════════════════════
-    # TAB NOTEBOOK
+    # TAB CONTENT AREA
     # ═══════════════════════════════════════════════════════
     
     def _create_notebook(self):
-        """Create tab notebook with all tabs"""
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(side="right", fill="both", expand=True, padx=0, pady=0)
-        
+        """Create content area using Frames instead of ttk.Notebook (no visible tabs)"""
+
+        # Create main content frame (replaces Notebook)
+        self.content_frame = tk.Frame(self.root, bg=COLORS["bg_dark"])
+        self.content_frame.pack(side="right", fill="both", expand=True, padx=0, pady=0)
+
         self.tabs = {
-            "dashboard": DashboardTab(self.notebook, self),
-            "campaign_dashboard": CampaignDashboardTab(self.notebook, self),
-            "broadcast": BroadcastTab(self.notebook, self),
-            "account": AccountTab(self.notebook, self),
-            "campaign": CampaignTab(self.notebook, self),
-            "finder": FinderTab(self.notebook, self),
-            "scrape": ScrapeTab(self.notebook, self),
-            "join": JoinTab(self.notebook, self),
-            "ai_cs": AICSTab(self.notebook, self),
-            "analytics": AnalyticsTab(self.notebook, self),
-            "crm": CRMTab(self.notebook, self),
-            "billing": BillingTab(self.notebook, self),
-            "security": SecurityTab(self.notebook, self),
-            "users": UsersTab(self.notebook, self),
-            "whitelabel": WhiteLabelTab(self.notebook, self),
-            "gdpr": GDPRTab(self.notebook, self),
-            "settings": SettingsTab(self.notebook, self),
-            "log": LogTab(self.notebook, self),
-            "tools": ToolsTab(self.notebook, self),
-            "clients": ClientsTab(self.notebook, self),
-            "client_portal": ClientPortalTab(self.notebook, self),
-            "help": HelpTab(self.notebook, self),
-            "account_groups": AccountGroupsTab(self.notebook, self),
+            "dashboard": DashboardTab(self.content_frame, self),
+            "campaign_dashboard": CampaignDashboardTab(self.content_frame, self),
+            "broadcast": BroadcastTab(self.content_frame, self),
+            "account": AccountTab(self.content_frame, self),
+            "campaign": CampaignTab(self.content_frame, self),
+            "finder": FinderTab(self.content_frame, self),
+            "scrape": ScrapeTab(self.content_frame, self),
+            "join": JoinTab(self.content_frame, self),
+            "ai_cs": AICSTab(self.content_frame, self),
+            "analytics": AnalyticsTab(self.content_frame, self),
+            "crm": CRMTab(self.content_frame, self),
+            "billing": BillingTab(self.content_frame, self),
+            "security": SecurityTab(self.content_frame, self),
+            "users": UsersTab(self.content_frame, self),
+            "whitelabel": WhiteLabelTab(self.content_frame, self),
+            "gdpr": GDPRTab(self.content_frame, self),
+            "settings": SettingsTab(self.content_frame, self),
+            "log": LogTab(self.content_frame, self),
+            "tools": ToolsTab(self.content_frame, self),
+            "clients": ClientsTab(self.content_frame, self),
+            "client_portal": ClientPortalTab(self.content_frame, self),
+            "help": HelpTab(self.content_frame, self),
+            "account_groups": AccountGroupsTab(self.content_frame, self),
         }
-        
+
         self.account_tab = self.tabs["account"]
         self.broadcast_tab = self.tabs["broadcast"]
+        self.campaign_tab = self.tabs["campaign"]
         self.log_tab = self.tabs["log"]
-        
+
+        # Pack all tab frames then hide them; show one at a time
         for name, tab in self.tabs.items():
-            self.notebook.add(tab.frame, text=tab.title)
-        
-        # Hide tab headers (clean look)
-        self.notebook.bind("<Button-1>", lambda e: "break")
+            tab.frame.pack(fill="both", expand=True)
+            tab.frame.pack_forget()
+
+        # Show first tab (dashboard) by default
+        self.tabs["dashboard"].frame.pack(fill="both", expand=True)
+        self.current_tab_index = 0
     
     # ═══════════════════════════════════════════════════════
     # STATUS BAR (BOTTOM)
@@ -263,16 +269,25 @@ class MainWindow:
     # ═══════════════════════════════════════════════════════
     
     def _switch_tab(self, index):
-        """Switch tab with visual feedback"""
-        self.notebook.select(index)
-        
+        """Switch tab by hiding current frame and showing the selected one"""
+
+        # Hide all tab frames
+        for tab in self.tabs.values():
+            tab.frame.pack_forget()
+
+        # Show the tab at the requested index
+        tab_names = list(self.tabs.keys())
+        if index < len(tab_names):
+            self.tabs[tab_names[index]].frame.pack(fill="both", expand=True)
+            self.current_tab_index = index
+
         # Update button colors using tab_index → button map
         for tab_idx, btn in self._tab_btn_map.items():
             if tab_idx == index:
                 btn.config(bg="#00d9ff", fg="#000000", font=("Segoe UI", 11, "bold"))
             else:
                 btn.config(bg="#0f3460", fg="#888888", font=("Segoe UI", 11))
-        
+
         # Refresh tab data
         try:
             if index == 2 and hasattr(self, 'broadcast_tab'):
