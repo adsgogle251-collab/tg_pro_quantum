@@ -4,20 +4,29 @@ TG PRO QUANTUM - Telegram Account Management Routes
 from math import ceil
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_client
 from app.database import get_db
-from app.models.database import AccountStatus, Client, TelegramAccount, AccountFeature, AccountGroupLink, Group
+from app.models.database import (
+    AccountStatus, Client, TelegramAccount, AccountFeature, AccountGroupLink, Group,
+    ImportSourceType,
+)
 from app.models.schemas import (
     AccountCreate, AccountResponse, AccountUpdate, MessageResponse,
     TelegramLoginRequest, TelegramLoginResponse, TelegramVerifyRequest,
     AccountFeatureResponse, AccountGroupLinkResponse,
     PaginatedResponse,
+    # Sprint 3
+    SessionImportRequest, BulkAccountCreate, ImportResultResponse, ImportLogResponse,
+    TOTPEnableResponse, TOTPVerifyRequest, TOTPVerifyResponse,
 )
 from app.core.account_manager import account_manager as acct_mgr
+from app.services.import_service import import_service, parse_session_text, parse_csv_content, parse_excel_content
+from app.services.totp_service import totp_service
+from app.websocket_manager import ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["Telegram Accounts"])
 
@@ -526,3 +535,281 @@ async def get_account_groups(
         select(AccountGroupLink).where(AccountGroupLink.account_id == account_id)
     )
     return links_result.scalars().all()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Sprint 3: Session Import, Bulk Create, File Import, OTP/2FA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/import-session", response_model=ImportResultResponse, status_code=status.HTTP_201_CREATED)
+async def import_session(
+    body: SessionImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Import a single Telegram account from a pasted session string (Ctrl+A).
+
+    Parses the text to extract phone / api_id / api_hash / session_string,
+    then persists the account and fires a WebSocket ``account.imported`` event.
+    """
+    parsed = parse_session_text(body.session_text)
+
+    # Allow the caller to override phone and name
+    if body.phone:
+        parsed["phone"] = body.phone
+    if body.name:
+        parsed["name"] = body.name
+
+    if not parsed.get("phone"):
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract a phone number from the session text. "
+                   "Provide it explicitly via the 'phone' field.",
+        )
+
+    log = await import_service.create_import_log(
+        client_id=current_client.id,
+        source_type=ImportSourceType.session,
+        filename=None,
+        db=db,
+    )
+
+    imported, skipped, failed, errors = await import_service.bulk_upsert_accounts(
+        client_id=current_client.id,
+        rows=[parsed],
+        import_source="session",
+        db=db,
+    )
+    await import_service.finish_import_log(log, imported, skipped, failed, errors, db)
+
+    # Real-time notification
+    await ws_manager.broadcast(
+        f"client:{current_client.id}",
+        {"event": "account.imported", "source": "session", "imported": imported},
+    )
+
+    return ImportResultResponse(
+        import_log_id=log.id,
+        total_rows=log.total_rows,
+        imported=imported,
+        skipped=skipped,
+        failed_rows=failed,
+        errors=errors,
+        status=log.status,
+    )
+
+
+@router.post("/bulk-create", response_model=ImportResultResponse, status_code=status.HTTP_201_CREATED)
+async def bulk_create_accounts(
+    body: BulkAccountCreate,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Create multiple accounts in one request.
+
+    Duplicate phones (same client) are silently skipped.
+    Fires a WebSocket ``account.bulk_created`` event on completion.
+    """
+    rows = [a.model_dump(exclude_none=True) for a in body.accounts]
+
+    log = await import_service.create_import_log(
+        client_id=current_client.id,
+        source_type=ImportSourceType.bulk,
+        filename=None,
+        db=db,
+    )
+
+    imported, skipped, failed, errors = await import_service.bulk_upsert_accounts(
+        client_id=current_client.id,
+        rows=rows,
+        import_source="bulk",
+        db=db,
+    )
+    await import_service.finish_import_log(log, imported, skipped, failed, errors, db)
+
+    await ws_manager.broadcast(
+        f"client:{current_client.id}",
+        {"event": "account.bulk_created", "imported": imported, "skipped": skipped},
+    )
+
+    return ImportResultResponse(
+        import_log_id=log.id,
+        total_rows=log.total_rows,
+        imported=imported,
+        skipped=skipped,
+        failed_rows=failed,
+        errors=errors,
+        status=log.status,
+    )
+
+
+@router.post("/import-file", response_model=ImportResultResponse, status_code=status.HTTP_201_CREATED)
+async def import_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Mass import accounts from a CSV or Excel (.xlsx) file.
+
+    The file must contain at least a ``phone`` column.
+    Optional columns: ``name``, ``api_id``, ``api_hash``, ``session_string``, ``tags``.
+    Fires a WebSocket ``account.file_imported`` event on completion.
+    """
+    filename = file.filename or "upload"
+    content = await file.read()
+
+    # Detect format
+    if filename.lower().endswith((".xlsx", ".xls")):
+        rows, parse_errors = parse_excel_content(content)
+        source_type = ImportSourceType.excel
+    else:
+        rows, parse_errors = parse_csv_content(content)
+        source_type = ImportSourceType.csv
+
+    if parse_errors and not rows:
+        raise HTTPException(status_code=422, detail="; ".join(parse_errors))
+
+    log = await import_service.create_import_log(
+        client_id=current_client.id,
+        source_type=source_type,
+        filename=filename,
+        db=db,
+    )
+
+    imported, skipped, failed, errors = await import_service.bulk_upsert_accounts(
+        client_id=current_client.id,
+        rows=rows,
+        import_source=source_type.value,
+        db=db,
+    )
+    errors = parse_errors + errors
+    await import_service.finish_import_log(log, imported, skipped, failed, errors, db)
+
+    await ws_manager.broadcast(
+        f"client:{current_client.id}",
+        {"event": "account.file_imported", "filename": filename, "imported": imported},
+    )
+
+    return ImportResultResponse(
+        import_log_id=log.id,
+        total_rows=log.total_rows,
+        imported=imported,
+        skipped=skipped,
+        failed_rows=failed,
+        errors=errors,
+        status=log.status,
+    )
+
+
+@router.post("/{account_id}/enable-otp", response_model=TOTPEnableResponse)
+async def enable_otp(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Enable TOTP 2FA for an account.
+
+    Generates a new TOTP secret and 10 one-time backup codes.
+    The ``provisioning_uri`` can be rendered as a QR code by the frontend.
+    **Backup codes are shown only once** — the client must save them.
+    """
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    secret = totp_service.generate_secret()
+    plaintext_codes, hashed_codes = totp_service.generate_backup_codes()
+    uri = totp_service.get_provisioning_uri(
+        secret=secret,
+        account_label=account.phone,
+    )
+
+    account.otp_secret = secret
+    account.backup_codes = hashed_codes
+    # OTP is *not* marked enabled until the client verifies the first code
+    await db.flush()
+
+    await ws_manager.broadcast(
+        f"client:{current_client.id}",
+        {"event": "account.otp_setup", "account_id": account_id},
+    )
+
+    return TOTPEnableResponse(
+        secret=secret,
+        provisioning_uri=uri,
+        backup_codes=plaintext_codes,
+    )
+
+
+@router.post("/{account_id}/verify-otp", response_model=TOTPVerifyResponse)
+async def verify_otp(
+    account_id: int,
+    body: TOTPVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """
+    Verify the first TOTP code after setup, activating 2FA for the account.
+
+    Also accepts backup codes (8-character alphanumeric) in place of a TOTP code.
+    """
+    result = await db.execute(select(TelegramAccount).where(TelegramAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    _require_owns(account, current_client)
+
+    if not account.otp_secret:
+        raise HTTPException(status_code=400, detail="OTP not set up for this account. Call /enable-otp first.")
+
+    code = body.code.strip()
+    remaining: Optional[int] = None
+
+    # 8-char code → try backup codes
+    if len(code) == 8:
+        valid, remaining_hashes = totp_service.verify_backup_code(
+            code=code,
+            stored_hashes=account.backup_codes or [],
+        )
+        if valid:
+            account.backup_codes = remaining_hashes
+            account.otp_enabled = True
+            await db.flush()
+            remaining = len(remaining_hashes)
+            return TOTPVerifyResponse(verified=True, remaining_backup_codes=remaining)
+        return TOTPVerifyResponse(verified=False)
+
+    # 6-char code → TOTP
+    verified = totp_service.verify_code(account.otp_secret, code)
+    if verified and not account.otp_enabled:
+        account.otp_enabled = True
+        await db.flush()
+
+        await ws_manager.broadcast(
+            f"client:{current_client.id}",
+            {"event": "account.otp_verified", "account_id": account_id},
+        )
+
+    return TOTPVerifyResponse(verified=verified)
+
+
+@router.get("/import-logs", response_model=List[ImportLogResponse])
+async def list_import_logs(
+    db: AsyncSession = Depends(get_db),
+    current_client: Client = Depends(get_current_client),
+):
+    """List all import logs for the current client (most recent first)."""
+    from app.models.database import ImportLog
+    result = await db.execute(
+        select(ImportLog)
+        .where(ImportLog.client_id == current_client.id)
+        .order_by(ImportLog.created_at.desc())
+        .limit(100)
+    )
+    return result.scalars().all()

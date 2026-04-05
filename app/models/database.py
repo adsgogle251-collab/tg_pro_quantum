@@ -118,6 +118,18 @@ class TelegramAccount(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Sprint 3: Advanced Account Features
+    credentials = Column(JSON, default=dict)          # encrypted credential store
+    otp_secret = Column(String(64), nullable=True)    # TOTP secret (base32)
+    backup_codes = Column(JSON, default=list)         # hashed backup codes
+    account_api_key = Column(String(64), nullable=True, index=True)  # per-account API key
+    account_webhook_url = Column(String(512), nullable=True)
+    tags = Column(JSON, default=list)                 # free-form tags
+    import_source = Column(String(64), nullable=True) # "session", "csv", "bulk", "manual"
+    last_activity = Column(DateTime(timezone=True), nullable=True)
+    account_settings = Column(JSON, default=dict)     # per-account settings
+    otp_enabled = Column(Boolean, default=False)
+
     __table_args__ = (UniqueConstraint("client_id", "phone", name="uq_client_phone"),)
 
     client = relationship("Client", back_populates="accounts")
@@ -502,3 +514,41 @@ class Webhook(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", backref="webhooks")
+
+
+# ── Sprint 3: Import Log ──────────────────────────────────────────────────────
+
+class ImportSourceType(str, enum.Enum):
+    session = "session"
+    csv = "csv"
+    excel = "excel"
+    bulk = "bulk"
+
+
+class ImportStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    partial = "partial"
+
+
+class ImportLog(Base):
+    """Tracks bulk / file import operations for audit and progress display."""
+    __tablename__ = "import_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    source_type = Column(Enum(ImportSourceType), nullable=False)
+    status = Column(Enum(ImportStatus), default=ImportStatus.pending, nullable=False)
+    total_rows = Column(Integer, default=0)
+    imported = Column(Integer, default=0)
+    skipped = Column(Integer, default=0)
+    failed_rows = Column(Integer, default=0)
+    errors = Column(JSON, default=list)          # list of error strings
+    filename = Column(String(255), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", backref="import_logs")

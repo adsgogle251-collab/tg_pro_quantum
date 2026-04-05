@@ -193,4 +193,30 @@ export const getNotifications = (params) =>
 export const markNotificationRead = (id) =>
   api.patch(`/notifications/${id}/read`).then((r) => r.data)
 
+// ─── Sprint 3: Account Import & OTP ─────────────────────────────────────────
+
+export const importSession = (data) =>
+  api.post('/accounts/import-session', data).then((r) => r.data)
+
+export const bulkCreateAccounts = (accounts) =>
+  api.post('/accounts/bulk-create', { accounts }).then((r) => r.data)
+
+export const importAccountsFile = (file, onUploadProgress) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post('/accounts/import-file', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress,
+  }).then((r) => r.data)
+}
+
+export const enableAccountOTP = (accountId) =>
+  api.post(`/accounts/${accountId}/enable-otp`).then((r) => r.data)
+
+export const verifyAccountOTP = (accountId, code) =>
+  api.post(`/accounts/${accountId}/verify-otp`, { code }).then((r) => r.data)
+
+export const getImportLogs = () =>
+  api.get('/accounts/import-logs').then((r) => r.data)
+
 export default api

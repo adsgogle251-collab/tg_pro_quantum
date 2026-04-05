@@ -8,6 +8,9 @@ from core.account_router import account_router, Feature
 from core.state_manager import state_manager
 from core.localization import t
 from gui.styles import COLORS, FONTS
+from gui.components.import_dialog import ImportDialog
+from gui.components.otp_setup_dialog import OTPSetupDialog
+from gui.components.ws_sync_client import WSSyncClient
 
 # Timeout (seconds) waiting for the user to enter an OTP during bulk import
 _BULK_OTP_TIMEOUT_SECONDS = 180
@@ -26,7 +29,18 @@ class AccountTab:
         self.items_per_page = 50
         self.total_pages = 1
         self.account_groups = account_manager.load_groups()
-        
+
+        # Sprint 3: WebSocket real-time sync
+        client_id = state_manager.get("client_id")
+        if client_id:
+            self._ws_client = WSSyncClient(
+                client_id=int(client_id),
+                on_event=self._on_ws_event,
+            )
+            self._ws_client.start()
+        else:
+            self._ws_client = None
+
         self._create_widgets()
         self._load_accounts()
     
@@ -76,6 +90,12 @@ class AccountTab:
         
         tk.Button(toolbar, text=f"📥 {t('Import')}", command=self._import_menu,
                   bg="#ffaa00", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
+
+        tk.Button(toolbar, text=f"📲 {t('Session Import')}", command=self._open_import_dialog,
+                  bg="#ff8800", fg="#000000", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
+
+        tk.Button(toolbar, text=f"🔐 {t('Setup 2FA')}", command=self._open_otp_setup_for_selected,
+                  bg="#7B2CBF", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
         
         tk.Button(toolbar, text=f"📤 {t('Export')}", command=self._export_accounts,
                   bg="#ff6b6b", fg="#ffffff", font=("Segoe UI", 11, "bold")).pack(side="left", padx=5)
@@ -1093,3 +1113,63 @@ class AccountTab:
     
     def _refresh(self):
         self._load_accounts()
+    # ── Sprint 3: Import Dialog ────────────────────────────────────────────────
+
+    def _open_import_dialog(self):
+        """Open the advanced Import dialog (Session / Bulk / File)."""
+        ImportDialog(self.frame, on_imported=self._on_import_finished)
+
+    def _on_import_finished(self, result: dict):
+        """Callback when an import finishes – refresh account list."""
+        self._load_accounts()
+        imported = result.get("imported", 0)
+        log(f"Import complete: {imported} account(s) added", "success")
+
+    # ── Sprint 3: OTP Setup ──────────────────────────────────────────────────
+
+    def _open_otp_setup_for_selected(self):
+        """Open OTP setup for the first selected account in the tree."""
+        selection = self.tree.selection() if hasattr(self, "tree") else []
+        if not selection:
+            messagebox.showwarning(
+                "No Selection",
+                "Select an account from the list first",
+                parent=self.frame,
+            )
+            return
+        item = self.tree.item(selection[0])
+        tags = item.get("tags", [])
+        # tags[0] is expected to be the account name
+        account_name = tags[0] if tags else ""
+        # Find account_id via local account_manager
+        accounts = account_manager.load_accounts()
+        acct = accounts.get(account_name, {})
+        account_id = acct.get("id")
+        if not account_id:
+            messagebox.showwarning(
+                "No ID",
+                "Account does not have a server ID. Sync with backend first.",
+                parent=self.frame,
+            )
+            return
+        OTPSetupDialog(
+            self.frame,
+            account_id=int(account_id),
+            account_phone=acct.get("phone", account_name),
+            on_enabled=lambda _: self._load_accounts(),
+        )
+
+    # ── Sprint 3: WebSocket event handler ────────────────────────────────────
+
+    def _on_ws_event(self, payload: dict):
+        """
+        Called from the WSSyncClient background thread when an account event
+        arrives.  Schedules a UI refresh on the Tkinter main thread.
+        """
+        event = payload.get("event", "")
+        if event in {
+            "account.imported", "account.bulk_created", "account.file_imported",
+            "account.updated", "account.deleted",
+        }:
+            self.frame.after(0, self._load_accounts)
+            self.frame.after(0, lambda: log(f"Real-time sync: {event}", "info"))

@@ -13,6 +13,7 @@ from app.models.database import (
     AccountFeature, AccountGroupLink,
     AccountGroupFeatureType, AccountGroupStatus,
     LicenseTier, LicenseStatus,
+    ImportSourceType, ImportStatus,
 )
 
 
@@ -150,13 +151,15 @@ class ClientDashboard(BaseModel):
 class AccountCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     phone: str = Field(..., pattern=r"^\+?[1-9]\d{6,14}$")
-    api_id: int = Field(..., gt=0)
-    api_hash: str = Field(..., min_length=32, max_length=64)
+    api_id: Optional[int] = Field(None, gt=0)
+    api_hash: Optional[str] = Field(None, min_length=32, max_length=64)
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     status: Optional[AccountStatus] = None
+    tags: Optional[List[str]] = None
+    account_settings: Optional[Dict[str, Any]] = None
 
 
 class AccountResponse(OrmBase):
@@ -169,6 +172,11 @@ class AccountResponse(OrmBase):
     messages_sent_today: int
     last_used_at: Optional[datetime]
     created_at: datetime
+    # Sprint 3 fields
+    tags: Optional[List[str]] = None
+    import_source: Optional[str] = None
+    last_activity: Optional[datetime] = None
+    otp_enabled: bool = False
 
 
 # ── Telegram OTP Login (account onboarding) ───────────────────────────────────
@@ -661,3 +669,68 @@ class WebhookResponse(OrmBase):
     secret: Optional[str]
     is_active: bool
     created_at: datetime
+
+
+# ── Sprint 3: Import & OTP Schemas ───────────────────────────────────────────
+
+class SessionImportRequest(BaseModel):
+    """Import a single account from a pasted session string."""
+    session_text: str = Field(..., min_length=10, description="Pasted session block (Ctrl+A)")
+    phone: Optional[str] = Field(None, pattern=r"^\+?[1-9]\d{6,14}$")
+    name: Optional[str] = Field(None, max_length=255)
+
+
+class BulkAccountCreate(BaseModel):
+    """Create multiple accounts in a single request."""
+
+    class AccountItem(BaseModel):
+        phone: str = Field(..., pattern=r"^\+?[1-9]\d{6,14}$")
+        name: Optional[str] = Field(None, max_length=255)
+        api_id: Optional[int] = Field(None, gt=0)
+        api_hash: Optional[str] = Field(None, max_length=64)
+        session_string: Optional[str] = None
+        tags: Optional[List[str]] = None
+
+    accounts: List[AccountItem] = Field(..., min_length=1, max_length=500)
+
+
+class ImportResultResponse(BaseModel):
+    import_log_id: int
+    total_rows: int
+    imported: int
+    skipped: int
+    failed_rows: int
+    errors: List[str]
+    status: ImportStatus
+
+
+class ImportLogResponse(OrmBase):
+    id: int
+    client_id: int
+    source_type: ImportSourceType
+    status: ImportStatus
+    total_rows: int
+    imported: int
+    skipped: int
+    failed_rows: int
+    errors: List[str]
+    filename: Optional[str]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    created_at: datetime
+
+
+class TOTPEnableResponse(BaseModel):
+    """Returned when TOTP is enabled for an account; contains the QR URI and backup codes."""
+    secret: str
+    provisioning_uri: str
+    backup_codes: List[str]    # shown once; not stored in plaintext
+
+
+class TOTPVerifyRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=8, description="6-digit TOTP code")
+
+
+class TOTPVerifyResponse(BaseModel):
+    verified: bool
+    remaining_backup_codes: Optional[int] = None
