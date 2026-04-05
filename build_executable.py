@@ -2,6 +2,7 @@
 """PyInstaller configuration for TG PRO QUANTUM Desktop App"""
 import PyInstaller.__main__
 import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).parent
@@ -21,9 +22,9 @@ args = [
     "--hidden-import=PIL",
     "--hidden-import=aiohttp",
     "--hidden-import=cryptography",
-    f"--add-data={project_root / 'gui'}:gui",
-    f"--add-data={project_root / 'license'}:license",
-    f"--add-data={project_root / 'core'}:core",
+    f"--add-data={project_root / 'gui'}{os.pathsep}gui",
+    f"--add-data={project_root / 'license'}{os.pathsep}license",
+    f"--add-data={project_root / 'core'}{os.pathsep}core",
     "--optimize=2",
     "--exclude-module=pytest",
     "--exclude-module=unittest",

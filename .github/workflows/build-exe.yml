@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -29,10 +31,10 @@ jobs:
       - name: Rename .exe with version
         run: |
           $version = "${{ github.event.release.tag_name }}"
-          $oldName = "dist\TG-PRO-QUANTUM.exe"
-          $newName = "dist\TG-PRO-QUANTUM-$version.exe"
-          if (Test-Path $oldName) {
-            Rename-Item -Path $oldName -NewName $newName
+          $oldPath = "dist\TG-PRO-QUANTUM.exe"
+          $newName = "TG-PRO-QUANTUM-$version.exe"
+          if (Test-Path $oldPath) {
+            Rename-Item -Path $oldPath -NewName $newName
           }
 
       - name: Upload .exe to Release
