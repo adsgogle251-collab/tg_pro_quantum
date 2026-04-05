@@ -9,6 +9,9 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 import threading
 import asyncio
+import os
+import sys
+import subprocess
 from datetime import datetime
 from core import log, ensure_dirs, config_manager, statistics, health_checker, backup_manager, set_logger, version, scheduler
 from core.engine import broadcast_engine, init_engines
@@ -21,6 +24,7 @@ from gui.styles import COLORS, FONTS, setup_theme
 
 # Import Login System
 from gui.tabs.login_tab import LoginDialog, get_current_user, set_current_user
+from license.manager import clear_session
 
 # Import ALL Tabs
 from gui.tabs.dashboard_tab import DashboardTab
@@ -70,11 +74,12 @@ class MainWindow:
         else:
             log("⚠️ API not configured. Set in Settings tab.", "warning")
         
-        # Create UI
+        # Create UI — order matters for tkinter pack geometry:
+        # bottom items must be packed before left/right items
         self._tab_btn_map = {}
+        self._create_statusbar()
         self._create_sidebar()
         self._create_notebook()
-        self._create_statusbar()
         self._start_services()
         
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -169,20 +174,31 @@ class MainWindow:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Footer with connection status
-        status_frame = tk.Frame(sidebar, bg="#1a1a2e", height=50)
+        # Footer with connection status + logout
+        status_frame = tk.Frame(sidebar, bg="#1a1a2e")
         status_frame.pack(side="bottom", fill="x")
-        status_frame.pack_propagate(False)
         
-        self.connection_indicator = tk.Label(status_frame, text="●", 
+        # Logout button
+        tk.Button(status_frame, text="🚪 Logout",
+                  font=("Segoe UI", 10, "bold"),
+                  bg="#ff4444", fg="#ffffff",
+                  activebackground="#cc0000", activeforeground="#ffffff",
+                  bd=0, pady=8,
+                  command=self._do_logout).pack(fill="x", padx=10, pady=(8, 4))
+        
+        # Connection indicator
+        conn_row = tk.Frame(status_frame, bg="#1a1a2e")
+        conn_row.pack(fill="x", padx=10, pady=(0, 8))
+        
+        self.connection_indicator = tk.Label(conn_row, text="●", 
                                               fg="#00ff00", bg="#1a1a2e", 
                                               font=("Segoe UI", 12))
-        self.connection_indicator.pack(side="left", padx=15, pady=10)
+        self.connection_indicator.pack(side="left")
         
-        self.connection_label = tk.Label(status_frame, text="Terhubung",
+        self.connection_label = tk.Label(conn_row, text="Terhubung",
                                           fg="#888888", bg="#1a1a2e",
                                           font=("Segoe UI", 9))
-        self.connection_label.pack(side="left")
+        self.connection_label.pack(side="left", padx=(6, 0))
     
     # ═══════════════════════════════════════════════════════
     # TAB CONTENT AREA
@@ -193,7 +209,7 @@ class MainWindow:
 
         # Create main content frame (replaces Notebook)
         self.content_frame = tk.Frame(self.root, bg=COLORS["bg_dark"])
-        self.content_frame.pack(side="right", fill="both", expand=True, padx=0, pady=0)
+        self.content_frame.pack(side="left", fill="both", expand=True)
 
         self.tabs = {
             "dashboard": DashboardTab(self.content_frame, self),
@@ -362,6 +378,35 @@ class MainWindow:
         self.stats_label.config(text=f"📊 {stats['total_broadcasts']} | ✅ {stats['success_rate']}%")
         self.root.after(10000, self._update_statusbar_stats)
     
+    # ═══════════════════════════════════════════════════════
+    # LOGOUT
+    # ═══════════════════════════════════════════════════════
+
+    def _do_logout(self):
+        """Logout: clear saved session then restart the app."""
+        if not messagebox.askyesno("Logout", "Keluar dari akun dan kembali ke layar login?"):
+            return
+        try:
+            clear_session()
+            set_current_user(None)
+            log("User logged out", "info")
+        except Exception as e:
+            log(f"Logout warning: {e}", "warning")
+
+        # Stop services before restart
+        try:
+            broadcast_engine.stop()
+            auto_backup.stop()
+            scheduler_24h.stop()
+        except Exception:
+            pass
+
+        # Restart the process so the login dialog is shown again
+        messagebox.showinfo("Logout", "✅ Berhasil logout!\nAplikasi akan dimulai ulang.")
+        self.root.destroy()
+        subprocess.Popen([sys.executable] + sys.argv)
+        sys.exit(0)
+
     # ═══════════════════════════════════════════════════════
     # CLOSE HANDLER
     # ═══════════════════════════════════════════════════════
