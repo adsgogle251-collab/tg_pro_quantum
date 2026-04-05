@@ -156,33 +156,39 @@ class AccountTab:
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=12, selectmode="extended")
         
         self.tree.heading("✓", text="✓")
-        self.tree.column("✓", width=40)
+        self.tree.column("✓", width=35, minwidth=35, stretch=False)
         
         self.tree.heading("Nama", text=t("Account Name"))
-        self.tree.column("Nama", width=120)
+        self.tree.column("Nama", width=110, minwidth=80, stretch=True)
         
         self.tree.heading("Telepon", text=t("Phone Number"))
-        self.tree.column("Telepon", width=120)
+        self.tree.column("Telepon", width=110, minwidth=80, stretch=False)
         
         self.tree.heading("Level", text="Level")
-        self.tree.column("Level", width=60)
+        self.tree.column("Level", width=50, minwidth=40, stretch=False)
         
         self.tree.heading("Sesi", text=t("Session"))
-        self.tree.column("Sesi", width=80)
+        self.tree.column("Sesi", width=50, minwidth=40, stretch=False)
         
         self.tree.heading("Status", text=t("Status"))
-        self.tree.column("Status", width=100)
+        self.tree.column("Status", width=90, minwidth=70, stretch=False)
         
         self.tree.heading("Grup", text=t("Group"))
-        self.tree.column("Grup", width=100)
+        self.tree.column("Grup", width=80, minwidth=60, stretch=False)
         
         self.tree.heading("Fitur", text="Fitur")
-        self.tree.column("Fitur", width=160)
+        self.tree.column("Fitur", width=130, minwidth=100, stretch=False)
         
         self.tree.heading("Tingkat", text=t("Success Rate"))
-        self.tree.column("Tingkat", width=90)
+        self.tree.column("Tingkat", width=70, minwidth=60, stretch=False)
         
-        self.tree.pack(fill="both", expand=True, padx=10, pady=5)
+        # Scrollbars for the table (vertical + horizontal)
+        tree_scroll_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        tree_scroll_x = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=tree_scroll_y.set, xscrollcommand=tree_scroll_x.set)
+        tree_scroll_y.pack(side="right", fill="y")
+        tree_scroll_x.pack(side="bottom", fill="x")
+        self.tree.pack(fill="both", expand=True, padx=(10, 0), pady=(5, 0))
         self.tree.bind("<Button-1>", self._on_tree_click)
         
         # ═══════════════════════════════════════════════════
@@ -847,37 +853,59 @@ class AccountTab:
         if filepath:
             name = simpledialog.askstring("Account Name", "Enter account name:")
             if name:
-                result = import_manager.import_session_single(filepath, name)
-                self._load_accounts()
-                if result.success:
-                    messagebox.showinfo("Success", f"Session imported: {name}")
+                try:
+                    result = import_manager.import_session_single(filepath, name)
+                    self._load_accounts()
+                    if result.success:
+                        messagebox.showinfo("Success", f"Session imported: {name}")
+                    else:
+                        messagebox.showerror("Import Error", f"Failed to import: {getattr(result, 'error', 'Unknown error')}")
+                except Exception as e:
+                    log(f"Import session error: {e}", "error")
+                    messagebox.showerror("Import Error", str(e))
     
     def _import_sessions_folder(self):
         folder = filedialog.askdirectory()
         if folder:
-            result = import_manager.import_sessions_folder(folder)
-            self._load_accounts()
-            messagebox.showinfo("Import", f"Imported {result.imported} sessions")
+            try:
+                result = import_manager.import_sessions_folder(folder)
+                self._load_accounts()
+                messagebox.showinfo("Import", f"Imported {result.imported} sessions")
+            except Exception as e:
+                log(f"Import folder error: {e}", "error")
+                messagebox.showerror("Import Error", str(e))
     
     def _import_phones_csv(self):
         filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if filepath:
-            result = import_manager.import_phones_csv(filepath)
-            self._load_accounts()
-            messagebox.showinfo("Import", f"Imported {result.imported} phones")
+            try:
+                result = import_manager.import_phones_csv(filepath)
+                self._load_accounts()
+                messagebox.showinfo("Import", f"Imported {result.imported} phones")
+            except Exception as e:
+                log(f"Import CSV error: {e}", "error")
+                messagebox.showerror("Import Error", str(e))
     
     def _import_phones_txt(self):
         filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if filepath:
-            result = import_manager.import_phones_txt(filepath, "pipe")
-            self._load_accounts()
-            messagebox.showinfo("Import", f"Imported {result.imported} phones")
+            try:
+                result = import_manager.import_phones_txt(filepath, "pipe")
+                self._load_accounts()
+                messagebox.showinfo("Import", f"Imported {result.imported} phones")
+            except Exception as e:
+                log(f"Import TXT error: {e}", "error")
+                messagebox.showerror("Import Error", str(e))
     
     def _export_accounts(self):
         filepath = filedialog.asksaveasfilename(defaultextension=".csv")
         if filepath:
-            import_manager.export_accounts(filepath, 'csv')
-            messagebox.showinfo("Success", f"Exported to {filepath}")
+            try:
+                import_manager.export_accounts(filepath, 'csv')
+                messagebox.showinfo("Success", f"Exported to {filepath}")
+            except Exception as e:
+                log(f"Export error: {e}", "error")
+                messagebox.showerror("Export Error", str(e))
     
     # ═══════════════════════════════════════════════════════
     # FEATURE ASSIGNMENT
@@ -885,68 +913,92 @@ class AccountTab:
     
     def _bulk_assign_broadcast(self):
         if not self.selected_accounts:
-            messagebox.showwarning(t("Warning"), t("Select accounts first!") if "Select accounts first!" in t.__doc__ or True else "Pilih akun terlebih dahulu!")
+            messagebox.showwarning(t("Warning"), "Pilih akun terlebih dahulu!")
             return
-        for name in self.selected_accounts:
-            account_manager.assign_feature(name, "broadcast")
-        self._load_accounts()
-        self._sync_feature_tabs()
-        messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Broadcast")
+        try:
+            for name in self.selected_accounts:
+                account_manager.assign_feature(name, "broadcast")
+            self._load_accounts()
+            self._sync_feature_tabs()
+            messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Broadcast")
+        except Exception as e:
+            log(f"Assign broadcast error: {e}", "error")
+            messagebox.showerror("Error", str(e))
 
     def _bulk_assign_finder(self):
         if not self.selected_accounts:
             messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
-        for name in self.selected_accounts:
-            account_manager.assign_feature(name, "finder")
-        self._load_accounts()
-        self._sync_feature_tabs()
-        messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Finder")
+        try:
+            for name in self.selected_accounts:
+                account_manager.assign_feature(name, "finder")
+            self._load_accounts()
+            self._sync_feature_tabs()
+            messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Finder")
+        except Exception as e:
+            log(f"Assign finder error: {e}", "error")
+            messagebox.showerror("Error", str(e))
 
     def _bulk_assign_scrape(self):
         if not self.selected_accounts:
             messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
-        for name in self.selected_accounts:
-            account_manager.assign_feature(name, "scrape")
-        self._load_accounts()
-        self._sync_feature_tabs()
-        messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Scrape")
+        try:
+            for name in self.selected_accounts:
+                account_manager.assign_feature(name, "scrape")
+            self._load_accounts()
+            self._sync_feature_tabs()
+            messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Scrape")
+        except Exception as e:
+            log(f"Assign scrape error: {e}", "error")
+            messagebox.showerror("Error", str(e))
 
     def _bulk_assign_join(self):
         if not self.selected_accounts:
             messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
-        for name in self.selected_accounts:
-            account_manager.assign_feature(name, "join")
-        self._load_accounts()
-        self._sync_feature_tabs()
-        messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Join")
+        try:
+            for name in self.selected_accounts:
+                account_manager.assign_feature(name, "join")
+            self._load_accounts()
+            self._sync_feature_tabs()
+            messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to Join")
+        except Exception as e:
+            log(f"Assign join error: {e}", "error")
+            messagebox.showerror("Error", str(e))
 
     def _bulk_assign_cs(self):
         if not self.selected_accounts:
             messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
-        for name in self.selected_accounts:
-            account_manager.assign_feature(name, "cs")
-        self._load_accounts()
-        self._sync_feature_tabs()
-        messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to CS")
+        try:
+            for name in self.selected_accounts:
+                account_manager.assign_feature(name, "cs")
+            self._load_accounts()
+            self._sync_feature_tabs()
+            messagebox.showinfo("Success", f"Assigned {len(self.selected_accounts)} to CS")
+        except Exception as e:
+            log(f"Assign CS error: {e}", "error")
+            messagebox.showerror("Error", str(e))
 
     def _bulk_unassign(self):
         if not self.selected_accounts:
             messagebox.showwarning("Peringatan", "Pilih akun terlebih dahulu!")
             return
         if messagebox.askyesno("Konfirmasi", f"Lepas semua penetapan fitur dari {len(self.selected_accounts)} akun?"):
-            for name in self.selected_accounts:
-                acc = account_manager.get(name)
-                if acc:
-                    acc["features"] = []
-                    acc["assigned_groups"] = []
-            account_manager._save_accounts()
-            self._load_accounts()
-            self._sync_feature_tabs()
-            messagebox.showinfo("Success", f"Unassigned {len(self.selected_accounts)} accounts")
+            try:
+                for name in self.selected_accounts:
+                    acc = account_manager.get(name)
+                    if acc:
+                        acc["features"] = []
+                        acc["assigned_groups"] = []
+                account_manager._save_accounts()
+                self._load_accounts()
+                self._sync_feature_tabs()
+                messagebox.showinfo("Success", f"Unassigned {len(self.selected_accounts)} accounts")
+            except Exception as e:
+                log(f"Unassign error: {e}", "error")
+                messagebox.showerror("Error", str(e))
 
     def _sync_feature_tabs(self):
         """Notify main_window to sync all feature tabs."""
@@ -982,13 +1034,17 @@ class AccountTab:
         def create_group():
             name = group_name_entry.get().strip()
             if name:
-                if account_manager.create_group(name):
-                    self._update_group_combo()
-                    self._sync_groups_to_broadcast()
-                    _load_groups_list()
-                    messagebox.showinfo("Success", f"Group '{name}' created!")
-                else:
-                    messagebox.showerror("Error", "Group already exists!")
+                try:
+                    if account_manager.create_group(name):
+                        self._update_group_combo()
+                        self._sync_groups_to_broadcast()
+                        _load_groups_list()
+                        messagebox.showinfo("Success", f"Group '{name}' created!")
+                    else:
+                        messagebox.showerror("Error", "Group already exists!")
+                except Exception as e:
+                    log(f"Create group error: {e}", "error")
+                    messagebox.showerror("Error", str(e))
         
         tk.Button(create_frame, text="➕ Create", command=create_group,
                   bg="#00ff00", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=10)
@@ -1042,10 +1098,14 @@ class AccountTab:
             if not group or not self.selected_accounts:
                 messagebox.showwarning("Warning", "Select group and accounts first!")
                 return
-            added = account_manager.bulk_assign_to_group(group, self.selected_accounts)
-            _load_groups_list()
-            self._sync_groups_to_broadcast()
-            messagebox.showinfo("Success", f"Assigned {added} accounts to '{group}'")
+            try:
+                added = account_manager.bulk_assign_to_group(group, self.selected_accounts)
+                _load_groups_list()
+                self._sync_groups_to_broadcast()
+                messagebox.showinfo("Success", f"Assigned {added} accounts to '{group}'")
+            except Exception as e:
+                log(f"Assign to group error: {e}", "error")
+                messagebox.showerror("Error", str(e))
         
         tk.Button(assign_frame, text="✅ Assign Selected", command=assign_selected,
                   bg="#00ff00", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=10)
@@ -1086,11 +1146,15 @@ class AccountTab:
                 return
             group_name = groups_tree.item(selection[0])["tags"][0]
             if messagebox.askyesno("Confirm", f"Delete group '{group_name}'?"):
-                if account_manager.delete_group(group_name):
-                    _load_groups_list()
-                    self._update_group_combo()
-                    self._sync_groups_to_broadcast()
-                    messagebox.showinfo("Success", f"Group '{group_name}' deleted!")
+                try:
+                    if account_manager.delete_group(group_name):
+                        _load_groups_list()
+                        self._update_group_combo()
+                        self._sync_groups_to_broadcast()
+                        messagebox.showinfo("Success", f"Group '{group_name}' deleted!")
+                except Exception as e:
+                    log(f"Delete group error: {e}", "error")
+                    messagebox.showerror("Error", str(e))
         
         tk.Button(btn_frame, text="👁️ View", command=view_group,
                   bg="#00d9ff", fg="#000000", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)

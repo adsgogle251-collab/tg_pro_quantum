@@ -205,7 +205,7 @@ class AccountManager:
                 acc["status"] = "session_expired"
                 self._save_accounts()
         
-        log(f"Found {len(valid)} valid accounts out of {len(self.accounts)}", "info")
+        log(f"Found {len(valid)} valid accounts out of {len(self.accounts)}", "debug")
         return valid
     
     def get_accounts_with_status(self) -> List[dict]:

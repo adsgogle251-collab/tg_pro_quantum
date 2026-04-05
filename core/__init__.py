@@ -71,6 +71,7 @@ from . import encryption
 from . import session_manager
 from . import task_queue
 from . import cache_manager
+from . import security_ultimate
 from . import crm_engine
 from . import billing_engine
 from . import whitelabel_manager
@@ -119,6 +120,11 @@ from .localization import t               # ✅ Translation function
 from .auto_backup import auto_backup
 from .notification_manager import notification_manager
 from .help_manager import help_manager
+
+# === MISSING INSTANCE IMPORTS ===
+from .import_manager import import_manager  # override module with instance
+from .ai_cs_engine import ai_cs_engine  # override module with instance
+from .security_ultimate import security_ultimate  # instance
 
 # === PHASE 10 INSTANCES ===
 from .scheduler_24h import scheduler_24h  # ✅ 24/7 scheduler instance
@@ -169,7 +175,7 @@ __all__ = [
     "backup_manager", "scheduler", "account_manager", "account_router",
     "import_manager", "ai_cs_engine", "encryption", "session_manager",
     "task_queue", "cache_manager", "init_engines",
-    "state_manager", "localization",
+    "state_manager", "localization", "security_ultimate",
     
     # === Engine Instances ===
     "crm_engine",
