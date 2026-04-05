@@ -130,13 +130,13 @@ async def analytics_dashboard(
 
 @router.get("/charts")
 async def analytics_charts(
-    range: str = Query("30d", pattern=r"^(7d|30d|90d)$"),
+    time_range: str = Query("30d", alias="range", pattern=r"^(7d|30d|90d)$"),
     db: AsyncSession = Depends(get_db),
     current_client: Client = Depends(get_current_client),
 ):
     """Chart data for the analytics page (line, bar, pie)."""
     now = datetime.now(timezone.utc)
-    days = {"7d": 7, "30d": 30, "90d": 90}.get(range, 30)
+    days = {"7d": 7, "30d": 30, "90d": 90}.get(time_range, 30)
     since = now - timedelta(days=days)
 
     # Recent campaigns for bar chart
@@ -176,7 +176,7 @@ async def analytics_charts(
         "bar": bar_data,
         "pie": pie_data,
         "line": line_data,
-        "range": range,
+        "range": time_range,
     }
 
 
