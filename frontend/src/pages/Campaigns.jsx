@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { getCampaigns } from '../services/api'
 import { FormSelect, FormButton } from '../components/Forms'
+import DataTable from '../components/DataTable'
 import theme from '../styles/theme'
 
 const STATUS_OPTIONS = [
-  { value: 'all',      label: 'All Statuses'  },
-  { value: 'active',   label: 'Active'        },
-  { value: 'paused',   label: 'Paused'        },
-  { value: 'completed',label: 'Completed'     },
-  { value: 'failed',   label: 'Failed'        },
+  { value: 'all',       label: 'All Statuses'  },
+  { value: 'active',    label: 'Active'        },
+  { value: 'paused',    label: 'Paused'        },
+  { value: 'completed', label: 'Completed'     },
+  { value: 'failed',    label: 'Failed'        },
 ]
 
 const MOCK = [
@@ -27,11 +28,12 @@ const STATUS_COLORS = {
 }
 
 function Badge({ status }) {
+  const color = STATUS_COLORS[status] ?? theme.textMuted
   return (
     <span style={{
-      background: `${STATUS_COLORS[status] ?? theme.textMuted}22`,
-      color: STATUS_COLORS[status] ?? theme.textMuted,
-      border: `1px solid ${STATUS_COLORS[status] ?? theme.textMuted}55`,
+      background: `${color}22`,
+      color,
+      border: `1px solid ${color}55`,
       borderRadius: 20,
       padding: '3px 10px',
       fontSize: 11,
@@ -43,10 +45,10 @@ function Badge({ status }) {
   )
 }
 
-function ProgressBar({ sent, total, failed }) {
+function ProgressBar({ sent, total }) {
   const pct = total > 0 ? Math.round((sent / total) * 100) : 0
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 100 }}>
       <div style={{ background: theme.bgLight, borderRadius: 4, height: 6, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: theme.primary, borderRadius: 4, transition: 'width 0.4s' }} />
       </div>
@@ -65,8 +67,23 @@ export default function Campaigns() {
 
   const visible = filter === 'all' ? campaigns : campaigns.filter((c) => c.status === filter)
 
-  const th = { padding: '12px 16px', textAlign: 'left', fontSize: 12, color: theme.textMuted, fontWeight: 600, borderBottom: `1px solid ${theme.bgLight}` }
-  const td = { padding: '14px 16px', fontSize: 13, color: theme.text, borderBottom: `1px solid ${theme.bgLight}22` }
+  const columns = [
+    { key: 'id',     label: '#',        sortable: true, width: 60 },
+    { key: 'name',   label: 'Name',     sortable: true,
+      render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { key: 'status', label: 'Status',
+      render: (v) => <Badge status={v} /> },
+    { key: 'sent',   label: 'Sent',     sortable: true,
+      render: (v) => v?.toLocaleString() },
+    { key: 'failed', label: 'Failed',   sortable: true,
+      render: (v) => <span style={{ color: theme.error }}>{v?.toLocaleString()}</span> },
+    { key: 'sent',   label: 'Progress',
+      render: (v, row) => <ProgressBar sent={row.sent} total={row.total} /> },
+    { key: 'id',     label: 'Actions',  width: 90,
+      render: () => (
+        <FormButton variant="ghost" style={{ padding: '5px 12px', fontSize: 12 }}>View</FormButton>
+      ) },
+  ]
 
   return (
     <div className="fade-in" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -84,38 +101,9 @@ export default function Campaigns() {
       </div>
 
       <div style={{ background: theme.bgMedium, border: `1px solid ${theme.bgLight}`, borderRadius: 12, overflow: 'hidden' }}>
-        <table>
-          <thead>
-            <tr>
-              <th style={th}>#</th>
-              <th style={th}>Name</th>
-              <th style={th}>Status</th>
-              <th style={th}>Sent</th>
-              <th style={th}>Failed</th>
-              <th style={th}>Progress</th>
-              <th style={th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((c) => (
-              <tr key={c.id}>
-                <td style={td}>{c.id}</td>
-                <td style={{ ...td, fontWeight: 500 }}>{c.name}</td>
-                <td style={td}><Badge status={c.status} /></td>
-                <td style={td}>{c.sent.toLocaleString()}</td>
-                <td style={{ ...td, color: theme.error }}>{c.failed.toLocaleString()}</td>
-                <td style={td}><ProgressBar sent={c.sent} total={c.total} failed={c.failed} /></td>
-                <td style={td}>
-                  <FormButton variant="ghost" style={{ padding: '5px 12px', fontSize: 12 }}>View</FormButton>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {visible.length === 0 && (
-          <p style={{ textAlign: 'center', padding: 40, color: theme.textMuted }}>No campaigns found.</p>
-        )}
+        <DataTable columns={columns} rows={visible} keyField="id" emptyMsg="No campaigns found." pageSize={10} />
       </div>
     </div>
   )
 }
+

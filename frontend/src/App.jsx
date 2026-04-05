@@ -17,11 +17,11 @@ function AppShell() {
   const { theme } = useTheme()
   return (
     <BrowserRouter>
-      <div style={{ display: 'flex', minHeight: '100vh', background: theme.bgDark }}>
+      <div style={{ display: 'flex', height: '100vh', background: theme.bgDark, overflow: 'hidden' }}>
         <Sidebar />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <Navbar />
-          <main style={{ flex: 1, overflowY: 'auto' }}>
+          <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
             <Routes>
               <Route path="/"           element={<Dashboard />}  />
               <Route path="/campaigns"  element={<Campaigns />}  />

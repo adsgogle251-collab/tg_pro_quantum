@@ -14,7 +14,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const isLogoutRequest = err.config?.url?.includes('/auth/logout')
+    if (err.response?.status === 401 && !isLogoutRequest) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user')
       if (!window.location.pathname.startsWith('/login')) {
