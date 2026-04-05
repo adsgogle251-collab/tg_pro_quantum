@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MdAdd, MdEdit, MdDelete, MdSearch } from 'react-icons/md'
+import { MdAdd, MdEdit, MdDelete, MdSearch, MdFileUpload, MdSecurity } from 'react-icons/md'
 import { getAccounts, createAccount, deleteAccount } from '../services/api'
 import { FormButton, FormInput, FormSelect } from '../components/Forms'
 import DataTable from '../components/DataTable'
 import ConfirmModal from '../components/ConfirmModal'
+import ImportModal from '../components/ImportModal'
+import OTPSetup from '../components/OTPSetup'
 import { useToast } from '../context/ToastContext'
+import { useRealTimeSync } from '../hooks/useRealTimeSync'
 import theme from '../styles/theme'
 
 const STATUS_COLORS = {
@@ -93,7 +96,12 @@ export default function Accounts() {
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('all')
   const [showAdd, setShowAdd]   = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [otpAccount, setOtpAccount] = useState(null)  // account to setup OTP for
   const [confirm, setConfirm]   = useState(null)
+
+  // Get clientId from stored user info for real-time sync
+  const clientId = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}').id } catch { return null } })()
 
   const load = useCallback(() => {
     setLoading(true)
@@ -104,6 +112,18 @@ export default function Accounts() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Real-time sync: auto-refresh on account events from any source (web/desktop)
+  useRealTimeSync(clientId, (event) => {
+    const accountEvents = [
+      'account.imported', 'account.bulk_created', 'account.file_imported',
+      'account.updated', 'account.deleted',
+    ]
+    if (accountEvents.includes(event.event)) {
+      load()
+      showToast(`Accounts updated (${event.event})`, 'info')
+    }
+  })
 
   const visible = accounts.filter((a) => {
     const matchStatus = filter === 'all' || a.status === filter
@@ -147,12 +167,19 @@ export default function Accounts() {
         return <span style={{ color, fontWeight: 600 }}>{score}%</span>
       },
     },
-    { key: 'id', label: 'Actions', width: 80,
+    { key: 'id', label: 'Actions', width: 110,
       render: (_, row) => (
-        <button onClick={() => setConfirm(row)} title="Remove"
-          style={{ background: 'none', border: 'none', color: theme.error, cursor: 'pointer' }}>
-          <MdDelete size={18} />
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setOtpAccount(row)} title="Setup 2FA"
+            style={{ background: 'none', border: 'none', cursor: 'pointer',
+              color: row.otp_enabled ? theme.success : theme.textMuted }}>
+            <MdSecurity size={18} />
+          </button>
+          <button onClick={() => setConfirm(row)} title="Remove"
+            style={{ background: 'none', border: 'none', color: theme.error, cursor: 'pointer' }}>
+            <MdDelete size={18} />
+          </button>
+        </div>
       ),
     },
   ]
@@ -161,9 +188,14 @@ export default function Accounts() {
     <div className="fade-in" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600 }}>Accounts</h2>
-        <FormButton onClick={() => setShowAdd(true)}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MdAdd size={16} /> Add Account</span>
-        </FormButton>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <FormButton variant="ghost" onClick={() => setShowImport(true)}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MdFileUpload size={16} /> Import</span>
+          </FormButton>
+          <FormButton onClick={() => setShowAdd(true)}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MdAdd size={16} /> Add Account</span>
+          </FormButton>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -184,6 +216,19 @@ export default function Accounts() {
       </div>
 
       {showAdd && <AddAccountModal onClose={() => setShowAdd(false)} onSave={handleAdd} />}
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImported={() => { load(); showToast('Import complete', 'success') }}
+        />
+      )}
+      {otpAccount && (
+        <OTPSetup
+          accountId={otpAccount.id}
+          onClose={() => setOtpAccount(null)}
+          onEnabled={() => { load(); showToast('2FA enabled', 'success') }}
+        />
+      )}
       {confirm && (
         <ConfirmModal
           isOpen={true}
