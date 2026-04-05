@@ -8,9 +8,9 @@
  *  4. On success show backup codes for the user to save
  */
 import { useState } from 'react'
-import { enableAccountOTP, verifyAccountOTP } from '../../services/api'
-import { FormButton, FormInput } from '../Forms'
-import theme from '../../styles/theme'
+import { enableAccountOTP, verifyAccountOTP } from '../services/api'
+import { FormButton, FormInput } from './Forms'
+import theme from '../styles/theme'
 
 const overlayStyle = {
   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -58,9 +58,13 @@ function StepScan({ setupData, onVerified }) {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [secretCopied, setSecretCopied] = useState(false)
 
-  // Build QR code URL using a public QR API (no data is sent except the OTP URI)
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.provisioning_uri)}`
+  const copySecret = () => {
+    navigator.clipboard.writeText(setupData.secret)
+    setSecretCopied(true)
+    setTimeout(() => setSecretCopied(false), 2000)
+  }
 
   const verify = async (e) => {
     e.preventDefault()
@@ -82,19 +86,38 @@ function StepScan({ setupData, onVerified }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
-      <h4 style={{ margin: 0, fontSize: 15 }}>Scan QR Code</h4>
-      <img
-        src={qrUrl}
-        alt="TOTP QR Code"
-        style={{ border: `4px solid white`, borderRadius: 8, width: 200, height: 200 }}
-      />
+      <h4 style={{ margin: 0, fontSize: 15 }}>Add to Authenticator App</h4>
+      <p style={{ margin: 0, fontSize: 13, color: theme.textMuted, textAlign: 'center' }}>
+        Open your authenticator app (Google Authenticator, Authy, etc.) and
+        add a new account using the secret key below.
+      </p>
+      {/* Show secret key with copy button – avoids sending URI to third-party services */}
       <div style={{
-        background: theme.bgLight, borderRadius: 8, padding: '10px 16px',
-        fontFamily: 'monospace', fontSize: 13, letterSpacing: 2,
-        wordBreak: 'break-all', textAlign: 'center', maxWidth: 360,
+        background: theme.bgLight, borderRadius: 8, padding: '12px 16px',
+        width: '100%', boxSizing: 'border-box',
       }}>
-        <span style={{ color: theme.textMuted, fontSize: 11, display: 'block', marginBottom: 4 }}>Manual entry secret</span>
-        {setupData.secret}
+        <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 6 }}>
+          Secret key (enter manually in your app)
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <code style={{
+            flex: 1, fontFamily: 'monospace', fontSize: 13,
+            letterSpacing: 2, wordBreak: 'break-all', color: theme.primary,
+          }}>
+            {setupData.secret}
+          </code>
+          <button
+            onClick={copySecret}
+            style={{
+              background: theme.bgDark, border: `1px solid ${theme.bgLight}`,
+              borderRadius: 6, padding: '4px 10px', cursor: 'pointer',
+              color: secretCopied ? theme.success : theme.textMuted,
+              fontSize: 12, whiteSpace: 'nowrap',
+            }}
+          >
+            {secretCopied ? '✅ Copied' : '📋 Copy'}
+          </button>
+        </div>
       </div>
       <form onSubmit={verify} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <FormInput

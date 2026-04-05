@@ -74,7 +74,7 @@ def parse_session_text(text: str) -> Dict[str, Any]:
         parts = [p.strip() for p in text.split(sep)]
         if len(parts) >= 4:
             phone_candidate = parts[0]
-            if _PHONE_RE.fullmatch(phone_candidate.lstrip("+")):
+            if _PHONE_RE.fullmatch(phone_candidate):
                 return _normalise_parsed({
                     "phone": parts[0],
                     "api_id": parts[1],

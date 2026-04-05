@@ -7,9 +7,9 @@
  *  3. File Upload     – upload CSV or Excel file with progress bar
  */
 import { useState, useRef } from 'react'
-import { importSession, bulkCreateAccounts, importAccountsFile } from '../../services/api'
-import { FormButton, FormInput } from '../Forms'
-import theme from '../../styles/theme'
+import { importSession, bulkCreateAccounts, importAccountsFile } from '../services/api'
+import { FormButton, FormInput } from './Forms'
+import theme from '../styles/theme'
 
 const TABS = ['Session Import', 'Bulk Create', 'File Upload']
 

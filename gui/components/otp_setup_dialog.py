@@ -115,32 +115,41 @@ class OTPSetupDialog(tk.Toplevel):
         self._clear()
         data = self._setup_data
 
-        tk.Label(self, text="Scan or Enter Secret",
+        tk.Label(self, text="Set Up Authenticator App",
                  font=("Segoe UI", 13, "bold"), fg=COLORS["text"],
                  bg=COLORS["bg_dark"]).pack(pady=(20, 10))
 
-        # Secret box
+        # Instructions
+        tk.Label(
+            self,
+            text="Open your authenticator app and add a new account\nusing the secret key below.",
+            font=("Segoe UI", 9), fg=COLORS["muted"], bg=COLORS["bg_dark"],
+            justify="center",
+        ).pack(pady=(0, 10))
+
+        # Secret box with copy button
         secret_frame = tk.Frame(self, bg=COLORS["bg_light"])
         secret_frame.pack(padx=30, fill="x")
-        tk.Label(secret_frame, text="Secret key:", fg=COLORS["muted"],
-                 bg=COLORS["bg_light"], font=("Segoe UI", 9)).pack(anchor="w", padx=8, pady=(6, 0))
+        tk.Label(secret_frame, text="Secret key (copy to authenticator app):",
+                 fg=COLORS["muted"], bg=COLORS["bg_light"],
+                 font=("Segoe UI", 9)).pack(anchor="w", padx=8, pady=(6, 0))
+        secret_row = tk.Frame(secret_frame, bg=COLORS["bg_light"])
+        secret_row.pack(padx=8, pady=(0, 6), fill="x")
         secret_var = tk.StringVar(value=data.get("secret", ""))
-        tk.Entry(secret_frame, textvariable=secret_var, state="readonly",
+        tk.Entry(secret_row, textvariable=secret_var, state="readonly",
                  font=("Consolas", 11), bg=COLORS["bg_light"], fg=COLORS["primary"],
-                 relief="flat", readonlybackground=COLORS["bg_light"]).pack(
-            padx=8, pady=(0, 6), fill="x")
+                 relief="flat", readonlybackground=COLORS["bg_light"]).pack(side="left", fill="x", expand=True)
 
-        # QR code URL hint
-        uri = data.get("provisioning_uri", "")
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={requests.utils.quote(uri)}"
-        tk.Label(self, text="QR code URL (open in browser):",
-                 fg=COLORS["muted"], bg=COLORS["bg_dark"],
-                 font=("Segoe UI", 9)).pack(anchor="w", padx=30, pady=(12, 2))
-        qr_entry = tk.Entry(self, font=("Consolas", 8), bg=COLORS["bg_light"],
-                            fg=COLORS["muted"], relief="flat", width=56)
-        qr_entry.insert(0, qr_url)
-        qr_entry.configure(state="readonly")
-        qr_entry.pack(padx=30, fill="x")
+        def copy_secret():
+            self.clipboard_clear()
+            self.clipboard_append(data.get("secret", ""))
+            copy_btn.configure(text="✅ Copied")
+            self.after(1500, lambda: copy_btn.configure(text="📋 Copy"))
+
+        copy_btn = tk.Button(secret_row, text="📋 Copy", command=copy_secret,
+                             bg=COLORS["bg_dark"], fg=COLORS["primary"],
+                             relief="flat", cursor="hand2", padx=6)
+        copy_btn.pack(side="right", padx=(4, 0))
 
         # Code entry
         tk.Label(self, text="Enter the 6-digit code from your app:",

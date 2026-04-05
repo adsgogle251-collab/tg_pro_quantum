@@ -143,10 +143,16 @@ class TestTOTPService:
         assert len(remaining) == 9  # used code removed
 
     def test_backup_code_case_insensitive(self):
+        # Backup codes are uppercase-only but verification should accept lowercase input
         plaintext, hashed = self.svc.generate_backup_codes()
-        first_lower = plaintext[0].lower()
-        valid, _ = self.svc.verify_backup_code(first_lower, hashed)
-        assert valid is True
+        first_upper = plaintext[0]
+        first_lower = first_upper.lower()
+        # Verify that lowercase input is accepted (internal normalisation to upper)
+        valid_lower, _ = self.svc.verify_backup_code(first_lower, hashed)
+        # Also verify uppercase works
+        valid_upper, _ = self.svc.verify_backup_code(first_upper, hashed)
+        assert valid_upper is True
+        assert valid_lower is True  # implementation uppercases input before hashing
 
     def test_invalid_backup_code(self):
         _, hashed = self.svc.generate_backup_codes()

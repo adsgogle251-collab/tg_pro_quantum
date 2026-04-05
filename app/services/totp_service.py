@@ -5,7 +5,7 @@ Provides TOTP secret generation, QR-code URI building, and code verification
 using the ``pyotp`` library (already in requirements.txt).
 
 Backup codes are generated as random 8-character alphanumeric strings and
-stored as bcrypt hashes so they can be verified without storing plaintext.
+stored as SHA-256 hex digests so they can be verified without storing plaintext.
 """
 from __future__ import annotations
 
