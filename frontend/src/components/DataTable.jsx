@@ -130,9 +130,9 @@ export default function DataTable({
                 </td>
               </tr>
             ) : (
-              visible.map((row) => (
+              visible.map((row, idx) => (
                 <tr
-                  key={row[keyField] ?? JSON.stringify(row)}
+                  key={row[keyField] ?? idx}
                   style={{ cursor: onRowClick ? 'pointer' : 'default', transition: 'background 0.15s' }}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   onMouseEnter={(e) => { e.currentTarget.style.background = `${theme.bgLight}55` }}
