@@ -6,10 +6,15 @@ import Campaigns  from './pages/Campaigns'
 import Accounts   from './pages/Accounts'
 import Analytics  from './pages/Analytics'
 import Settings   from './pages/Settings'
-import theme from './styles/theme'
+import Profile    from './pages/Profile'
+import Admin      from './pages/Admin'
+import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { ToastProvider } from './context/ToastContext'
+import { I18nProvider } from './context/I18nContext'
 import './styles/globals.css'
 
-export default function App() {
+function AppShell() {
+  const { theme } = useTheme()
   return (
     <BrowserRouter>
       <div style={{ display: 'flex', minHeight: '100vh', background: theme.bgDark }}>
@@ -23,10 +28,24 @@ export default function App() {
               <Route path="/accounts"   element={<Accounts />}   />
               <Route path="/analytics"  element={<Analytics />}  />
               <Route path="/settings"   element={<Settings />}   />
+              <Route path="/profile"    element={<Profile />}    />
+              <Route path="/admin"      element={<Admin />}      />
             </Routes>
           </main>
         </div>
       </div>
     </BrowserRouter>
+  )
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AppShell />
+        </ToastProvider>
+      </ThemeProvider>
+    </I18nProvider>
   )
 }

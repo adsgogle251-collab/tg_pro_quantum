@@ -109,7 +109,7 @@ class TestSmokeClientManagement:
             "name": "APIKeyClient",
             "email": "apikey_smoke@test.com",
             "password": "SecurePass123!",
-            "plan_type": "basic",
+            "plan_type": "starter",
         }
         response = await client.post("/api/v1/clients/", json=payload, headers=headers)
         assert response.status_code in (200, 201)
