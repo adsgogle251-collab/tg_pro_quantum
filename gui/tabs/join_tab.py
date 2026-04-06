@@ -1,413 +1,748 @@
-"""Join Tab - Scrollable Content Fix"""
+"""
+gui/tabs/join_tab.py - Smart Join Engine UI
+Complete professional dashboard with:
+  - Account health display & rotation
+  - Adaptive delay control
+  - Real-time progress + ETA
+  - Activity log (newest first, color-coded)
+  - Pause / Resume / Stop / Retry controls
+  - Persistent queue resume prompt
+  - Settings panel (speed, ban handling, etc.)
+"""
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
-from core import log, load_groups, account_manager
-from core.account_router import account_router, Feature
-from core.utils import DATA_DIR
-from gui.styles import COLORS, FONTS
+from tkinter import ttk, messagebox, filedialog
+from datetime import datetime
 import threading
 from pathlib import Path
+
+from core import log, account_manager
+from core.utils import DATA_DIR
+from core.account_router import Feature
 from core.state_manager import state_manager
 from core.localization import t
+from core.finder import list_found_groups
+from core.join_engine import join_engine, JoinStats
+from core.account_health import check_accounts_health, get_health, health_label
+from core.persistent_queue import persistent_queue
+from gui.styles import COLORS, FONTS
+
+BG    = COLORS["bg_dark"]
+PANEL = COLORS["bg_medium"]
+CARD  = COLORS["bg_light"]
+CYAN  = COLORS["primary"]
+GREEN = COLORS["success"]
+GOLD  = COLORS["warning"]
+RED   = COLORS["error"]
+TEXT  = COLORS["text"]
+MUTED = COLORS["text_muted"]
+PURPLE = COLORS.get("scrape", "#9B59FF")
+
+LOG_COLORS = {
+    "success": GREEN,
+    "error":   RED,
+    "ban":     GOLD,
+    "warning": GOLD,
+    "pause":   PURPLE,
+    "info":    TEXT,
+}
+
 
 class JoinTab:
     title = "📤 Join"
-    
+
     def __init__(self, parent, main_window=None):
         self.parent = parent
         self.main_window = main_window
         self.frame = ttk.Frame(parent)
-        self.running = False
-        self.groups_to_join = []
-        self._create_widgets()
-        # Listen for account assignment changes
+        self._update_job = None  # after() job id for polling stats
+        self._build()
         state_manager.on_state_change("account_assigned", self._on_account_changed)
         state_manager.on_state_change("refresh_all", self._on_account_changed)
 
-    def _create_widgets(self):
-        # Header
-        tk.Label(self.frame, text=f"📤 {t('Auto Join Groups')}", font=("Segoe UI", 24, "bold"),
-                 fg=COLORS["primary"], bg=COLORS["bg_dark"]).pack(pady=15)
-        
-        # Main scrollable container
-        main_container = tk.Frame(self.frame, bg=COLORS["bg_dark"])
-        main_container.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Canvas with scrollbar
-        canvas = tk.Canvas(main_container, bg=COLORS["bg_dark"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = tk.Frame(canvas, bg=COLORS["bg_dark"])
-        
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
-        
-        # 1. Source Selection
-        source_frame = tk.LabelFrame(self.scrollable_frame, text=f"📁 {t('Select Group Source')}",
-                                     fg=COLORS["accent"], bg=COLORS["bg_medium"],
-                                     font=FONTS["heading"])
-        source_frame.pack(fill="x", padx=10, pady=10)
-        
-        self.source_var = tk.StringVar(value="valid_txt")
-        
-        tk.Radiobutton(source_frame, text="📄 groups/valid.txt (Finder Results)", variable=self.source_var,
-                      value="valid_txt", bg=COLORS["bg_medium"], fg=COLORS["text"],
-                      command=self._on_source_change).pack(anchor="w", padx=20, pady=3)
-        
-        tk.Radiobutton(source_frame, text="📂 Import from TXT File", variable=self.source_var,
-                      value="import_txt", bg=COLORS["bg_medium"], fg=COLORS["text"],
-                      command=self._on_source_change).pack(anchor="w", padx=20, pady=3)
-        
-        tk.Radiobutton(source_frame, text="✏️ Custom List (Manual Entry)", variable=self.source_var,
-                      value="custom", bg=COLORS["bg_medium"], fg=COLORS["text"],
-                      command=self._on_source_change).pack(anchor="w", padx=20, pady=3)
-        
-        # Source options
-        self.source_options_frame = tk.Frame(self.scrollable_frame, bg=COLORS["bg_medium"])
-        self.source_options_frame.pack(fill="x", padx=10, pady=10)
-        self._update_source_options()
-        
-        # 2. Account Selection
-        account_frame = tk.LabelFrame(self.scrollable_frame, text="📱 Accounts for Join",
-                                      fg=COLORS["accent"], bg=COLORS["bg_medium"],
-                                      font=FONTS["heading"])
-        account_frame.pack(fill="x", padx=10, pady=10)
-        
-        tk.Label(account_frame, text="Available:", fg=COLORS["text"], bg=COLORS["bg_medium"]).grid(row=0, column=0, padx=10, pady=5)
-        tk.Label(account_frame, text="Assigned:", fg=COLORS["text"], bg=COLORS["bg_medium"]).grid(row=0, column=2, padx=10, pady=5)
-        
-        self.available_accounts = tk.Listbox(account_frame, height=4, width=20, bg=COLORS["bg_light"], fg=COLORS["text"], selectmode="extended")
-        self.available_accounts.grid(row=1, column=0, padx=10, pady=5)
-        
-        self.assigned_accounts = tk.Listbox(account_frame, height=4, width=20, bg=COLORS["bg_light"], fg=COLORS["text"])
-        self.assigned_accounts.grid(row=1, column=2, padx=10, pady=5)
-        
-        assign_frame = tk.Frame(account_frame, bg=COLORS["bg_medium"])
-        assign_frame.grid(row=1, column=1, padx=10, pady=5)
-        tk.Button(assign_frame, text="➡️", command=self._assign_join_accounts, bg=COLORS["success"], fg="white").pack(pady=2)
-        tk.Button(assign_frame, text="⬅️", command=self._remove_join_accounts, bg=COLORS["error"], fg="white").pack(pady=2)
-        
-        self._load_account_lists()
-        
-        # 3. Settings
-        settings_frame = tk.LabelFrame(self.scrollable_frame, text="⚙️ Join Settings",
-                                       fg=COLORS["accent"], bg=COLORS["bg_medium"],
-                                       font=FONTS["heading"])
-        settings_frame.pack(fill="x", padx=10, pady=10)
-        
-        tk.Label(settings_frame, text="Max Join/Day:", fg=COLORS["text"], bg=COLORS["bg_medium"]).grid(row=0, column=0, padx=10, pady=5)
-        self.max_join = tk.Entry(settings_frame, width=10, bg=COLORS["bg_light"], fg=COLORS["text"])
-        self.max_join.insert(0, "50")
-        self.max_join.grid(row=0, column=1, padx=5, pady=5)
-        
-        tk.Label(settings_frame, text="| Delay (sec):", fg=COLORS["text"], bg=COLORS["bg_medium"]).grid(row=0, column=2, padx=10, pady=5)
-        self.delay_min = tk.Entry(settings_frame, width=6, bg=COLORS["bg_light"], fg=COLORS["text"])
-        self.delay_min.insert(0, "30")
-        self.delay_min.grid(row=0, column=3, padx=5, pady=5)
-        tk.Label(settings_frame, text="-", fg=COLORS["text"], bg=COLORS["bg_medium"]).grid(row=0, column=4)
-        self.delay_max = tk.Entry(settings_frame, width=6, bg=COLORS["bg_light"], fg=COLORS["text"])
-        self.delay_max.insert(0, "60")
-        self.delay_max.grid(row=0, column=5, padx=5, pady=5)
-        
-        self.smart_join_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(settings_frame, text="🧠 Smart Join (Skip if already joined)", variable=self.smart_join_var,
-                      bg=COLORS["bg_medium"], fg=COLORS["success"], selectcolor=COLORS["bg_medium"]).grid(row=1, column=0, columnspan=6, padx=10, pady=5, sticky="w")
-        
-        # 4. Control Buttons
-        btn_frame = tk.Frame(self.scrollable_frame, bg=COLORS["bg_medium"])
-        btn_frame.pack(fill="x", padx=10, pady=10)
-        
-        self.start_btn = tk.Button(btn_frame, text="▶ Start Join", command=self._start_join,
-                  bg=COLORS["success"], fg="white", font=FONTS["bold"], padx=30, pady=12)
-        self.start_btn.pack(side="left", padx=10)
-        
-        self.stop_btn = tk.Button(btn_frame, text="⏹️ Stop", command=self._stop_join,
-                  bg=COLORS["error"], fg="white", font=FONTS["bold"], padx=30, pady=12, state="disabled")
-        self.stop_btn.pack(side="left", padx=10)
-        
-        self.view_btn = tk.Button(btn_frame, text="📊 View Joined", command=self._view_joined,
-                  bg=COLORS["info"], fg="white", font=FONTS["bold"], padx=30, pady=12)
-        self.view_btn.pack(side="left", padx=10)
-        
-        # 5. Status & Progress
-        status_frame = tk.Frame(self.scrollable_frame, bg=COLORS["bg_medium"])
-        status_frame.pack(fill="x", padx=10, pady=10)
-        
-        self.status_label = tk.Label(status_frame, text="⚪ Ready", font=FONTS["bold"],
-                                     fg=COLORS["text_muted"], bg=COLORS["bg_medium"])
-        self.status_label.pack(pady=5)
-        
-        self.progress = ttk.Progressbar(status_frame, mode='determinate', length=600)
-        self.progress.pack(pady=5)
-        
-        # 6. Results
-        results_frame = tk.LabelFrame(self.scrollable_frame, text="📊 Join Results",
-                                      fg=COLORS["accent"], bg=COLORS["bg_medium"],
-                                      font=FONTS["heading"])
-        results_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        columns = ("Group", "Status", "Account", "Time")
-        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=10)
-        self.results_tree.heading("Group", text="Group Link")
-        self.results_tree.column("Group", width=300)
-        self.results_tree.heading("Status", text="Status")
-        self.results_tree.column("Status", width=100)
-        self.results_tree.heading("Account", text="Account Used")
-        self.results_tree.column("Account", width=150)
-        self.results_tree.heading("Time", text="Time")
-        self.results_tree.column("Time", width=150)
-        
-        self.results_tree.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        self.results_stats = tk.Label(results_frame, text="Joined: 0 | Skipped: 0 | Failed: 0",
-                                      fg=COLORS["text_muted"], bg=COLORS["bg_medium"])
-        self.results_stats.pack(pady=5)
-        
-        # Pack canvas and scrollbar
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+    # ──────────────────────────────────────────────────────────────────────────
+    # BUILD
+    # ──────────────────────────────────────────────────────────────────────────
 
-    def _on_tab_selected(self):
-        """Called by main_window when this tab is selected."""
-        self._load_account_lists()
+    def _build(self):
+        outer = tk.Frame(self.frame, bg=BG)
+        outer.pack(fill="both", expand=True, padx=14, pady=10)
+
+        # Title row
+        title_row = tk.Frame(outer, bg=BG)
+        title_row.pack(fill="x", pady=(0, 8))
+        tk.Label(title_row, text="🔗 Smart Join Engine",
+                 font=FONTS["heading_large"], fg=CYAN, bg=BG).pack(side="left")
+        self._health_check_btn = tk.Button(
+            title_row, text="🩺 Check Health", command=self._run_health_check,
+            bg=CARD, fg=CYAN, font=FONTS["bold"], relief="flat", padx=10, pady=4,
+        )
+        self._health_check_btn.pack(side="right", padx=4)
+        tk.Button(
+            title_row, text="⚙ Settings", command=self._toggle_settings,
+            bg=CARD, fg=TEXT, font=FONTS["bold"], relief="flat", padx=10, pady=4,
+        ).pack(side="right", padx=4)
+
+        # Two-column layout
+        cols = tk.Frame(outer, bg=BG)
+        cols.pack(fill="both", expand=True)
+
+        self._build_left(cols)
+        self._build_right(cols)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # LEFT COLUMN
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _build_left(self, parent):
+        left = tk.Frame(parent, bg=BG)
+        left.pack(side="left", fill="both", expand=True, padx=(0, 6))
+
+        # ── Accounts ──────────────────────────────────────────────
+        acc_frame = tk.LabelFrame(left, text=" 👤 Accounts (assigned to Join) ",
+                                  bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        acc_frame.pack(fill="both", expand=True, pady=(0, 6))
+
+        acc_btns = tk.Frame(acc_frame, bg=PANEL)
+        acc_btns.pack(fill="x", padx=8, pady=(6, 2))
+        tk.Button(acc_btns, text="Select All", command=self._select_all_accounts,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+        tk.Button(acc_btns, text="Refresh", command=self._reload_accounts,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+
+        sb_acc = tk.Scrollbar(acc_frame)
+        sb_acc.pack(side="right", fill="y")
+        self._acc_listbox = tk.Listbox(
+            acc_frame, selectmode="extended", yscrollcommand=sb_acc.set,
+            font=FONTS["mono"], bg=CARD, fg=TEXT, relief="flat", height=7,
+            selectbackground=COLORS["primary_light"], selectforeground=CYAN,
+        )
+        self._acc_listbox.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+        sb_acc.config(command=self._acc_listbox.yview)
+
+        # ── Group source ─────────────────────────────────────────
+        grp_src = tk.LabelFrame(left, text=" 🌐 Group Source ",
+                                bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        grp_src.pack(fill="x", pady=(0, 6))
+
+        self._grp_source_var = tk.StringVar(value="finder")
+        for lbl, val in [("From Finder Results", "finder"), ("Manual input", "manual"), ("From file (.txt)", "file")]:
+            tk.Radiobutton(grp_src, text=lbl, variable=self._grp_source_var, value=val,
+                           command=self._on_source_change,
+                           bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                           font=FONTS["normal"]).pack(anchor="w", padx=14, pady=2)
+
+        self._manual_frame = tk.Frame(grp_src, bg=PANEL)
+        self._manual_frame.pack(fill="x", padx=8, pady=(0, 6))
+        self._manual_text = tk.Text(self._manual_frame, height=3, font=FONTS["mono"],
+                                    bg=CARD, fg=TEXT, insertbackground=TEXT, relief="flat")
+        self._manual_text.pack(fill="x")
+        tk.Label(grp_src, text="One link per line (manual mode)",
+                 font=FONTS["small"], fg=MUTED, bg=PANEL).pack(anchor="w", padx=14, pady=(0, 4))
+
+        self._file_frame = tk.Frame(grp_src, bg=PANEL)
+        self._file_frame.pack(fill="x", padx=8, pady=(0, 6))
+        self._file_var = tk.StringVar()
+        tk.Entry(self._file_frame, textvariable=self._file_var, width=28,
+                 bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat").pack(side="left", fill="x", expand=True)
+        tk.Button(self._file_frame, text="Browse", command=self._browse_file,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=4)
+
+        # ── Group list ───────────────────────────────────────────
+        grp_sel = tk.LabelFrame(left, text=" 📋 Groups (Finder results) ",
+                                bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        grp_sel.pack(fill="both", expand=True, pady=(0, 6))
+
+        grp_btns = tk.Frame(grp_sel, bg=PANEL)
+        grp_btns.pack(fill="x", padx=8, pady=(6, 2))
+        tk.Button(grp_btns, text="Select All", command=self._select_all_groups,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+        tk.Button(grp_btns, text="Refresh", command=self._reload_groups,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+        self._grp_count_lbl = tk.Label(grp_btns, text="0 groups", font=FONTS["small"], fg=MUTED, bg=PANEL)
+        self._grp_count_lbl.pack(side="right", padx=6)
+
+        sb_grp = tk.Scrollbar(grp_sel)
+        sb_grp.pack(side="right", fill="y")
+        self._grp_listbox = tk.Listbox(
+            grp_sel, selectmode="extended", yscrollcommand=sb_grp.set,
+            font=FONTS["mono"], bg=CARD, fg=TEXT, relief="flat", height=8,
+            selectbackground=COLORS["primary_light"], selectforeground=CYAN,
+        )
+        self._grp_listbox.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+        sb_grp.config(command=self._grp_listbox.yview)
+
+        self._reload_accounts()
+        self._reload_groups()
+        self._on_source_change()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # RIGHT COLUMN
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _build_right(self, parent):
+        right = tk.Frame(parent, bg=BG)
+        right.pack(side="left", fill="both", expand=True)
+
+        # ── Control buttons ───────────────────────────────────────
+        ctrl_frame = tk.Frame(right, bg=PANEL)
+        ctrl_frame.pack(fill="x", pady=(0, 6))
+
+        self._start_btn = tk.Button(ctrl_frame, text="▶ START JOIN",
+                                    command=self._start_join,
+                                    bg=GREEN, fg="#000", font=FONTS["bold"],
+                                    relief="flat", padx=16, pady=8)
+        self._start_btn.pack(side="left", padx=6, pady=6)
+
+        self._pause_btn = tk.Button(ctrl_frame, text="⏸ PAUSE",
+                                    command=self._pause_join,
+                                    bg=GOLD, fg="#000", font=FONTS["bold"],
+                                    relief="flat", padx=12, pady=8, state="disabled")
+        self._pause_btn.pack(side="left", padx=4, pady=6)
+
+        self._resume_btn = tk.Button(ctrl_frame, text="⟳ RESUME",
+                                     command=self._resume_join,
+                                     bg=CYAN, fg="#000", font=FONTS["bold"],
+                                     relief="flat", padx=12, pady=8, state="disabled")
+        self._resume_btn.pack(side="left", padx=4, pady=6)
+
+        self._stop_btn = tk.Button(ctrl_frame, text="⏹ STOP",
+                                   command=self._stop_join,
+                                   bg=RED, fg="white", font=FONTS["bold"],
+                                   relief="flat", padx=12, pady=8, state="disabled")
+        self._stop_btn.pack(side="left", padx=4, pady=6)
+
+        self._retry_btn = tk.Button(ctrl_frame, text="↻ RETRY FAILED",
+                                    command=self._retry_failed,
+                                    bg=CARD, fg=TEXT, font=FONTS["bold"],
+                                    relief="flat", padx=10, pady=8, state="disabled")
+        self._retry_btn.pack(side="left", padx=4, pady=6)
+
+        # ── Progress ──────────────────────────────────────────────
+        prog_frame = tk.LabelFrame(right, text=" 📊 Progress ",
+                                   bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        prog_frame.pack(fill="x", pady=(0, 6))
+
+        self._progress_bar = ttk.Progressbar(prog_frame, mode="determinate", length=400)
+        self._progress_bar.pack(fill="x", padx=12, pady=6)
+        self._progress_pct_lbl = tk.Label(prog_frame, text="0%  (0/0)",
+                                          font=FONTS["bold"], fg=CYAN, bg=PANEL)
+        self._progress_pct_lbl.pack()
+
+        # Stats row
+        stats_row = tk.Frame(prog_frame, bg=PANEL)
+        stats_row.pack(fill="x", padx=12, pady=4)
+        self._stat_vars = {}
+        for key, label, color in [
+            ("joined",  "✅ Joined",  GREEN),
+            ("failed",  "❌ Failed",  RED),
+            ("banned",  "🚫 Banned",  GOLD),
+            ("skipped", "⏭ Skipped", MUTED),
+            ("pending", "⏱ Pending", TEXT),
+        ]:
+            col = tk.Frame(stats_row, bg=PANEL)
+            col.pack(side="left", expand=True)
+            tk.Label(col, text=label, font=FONTS["small"], fg=MUTED, bg=PANEL).pack()
+            var = tk.StringVar(value="0")
+            self._stat_vars[key] = var
+            tk.Label(col, textvariable=var, font=FONTS["subheading"], fg=color, bg=PANEL).pack()
+
+        meta_row = tk.Frame(prog_frame, bg=PANEL)
+        meta_row.pack(fill="x", padx=12, pady=(2, 6))
+        self._eta_lbl = tk.Label(meta_row, text="ETA: —",
+                                 font=FONTS["small"], fg=MUTED, bg=PANEL)
+        self._eta_lbl.pack(side="left", padx=8)
+        self._speed_lbl = tk.Label(meta_row, text="Speed: —",
+                                   font=FONTS["small"], fg=MUTED, bg=PANEL)
+        self._speed_lbl.pack(side="left", padx=8)
+        self._delay_lbl = tk.Label(meta_row, text="Delay: 3s",
+                                   font=FONTS["small"], fg=MUTED, bg=PANEL)
+        self._delay_lbl.pack(side="left", padx=8)
+        self._current_lbl = tk.Label(meta_row, text="",
+                                     font=FONTS["small"], fg=CYAN, bg=PANEL)
+        self._current_lbl.pack(side="left", padx=8)
+
+        # ── Settings panel (hidden by default) ───────────────────
+        self._settings_visible = False
+        self._settings_frame = tk.LabelFrame(right, text=" ⚙ Join Settings ",
+                                             bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        self._build_settings(self._settings_frame)
+
+        # ── Activity log ──────────────────────────────────────────
+        log_frame = tk.LabelFrame(right, text=" 📜 Activity Log (newest first) ",
+                                  bg=PANEL, fg=CYAN, font=FONTS["subheading"])
+        log_frame.pack(fill="both", expand=True)
+
+        log_btn_row = tk.Frame(log_frame, bg=PANEL)
+        log_btn_row.pack(fill="x", padx=8, pady=(4, 2))
+        tk.Button(log_btn_row, text="📋 Copy Log", command=self._copy_log,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+        tk.Button(log_btn_row, text="💾 Save Log", command=self._save_log,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+        tk.Button(log_btn_row, text="🔄 Clear", command=self._clear_log,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=2)
+
+        self._log_text = tk.Text(
+            log_frame, font=FONTS["mono"], bg=CARD, fg=TEXT,
+            relief="flat", state="disabled", height=14,
+            insertbackground=TEXT,
+        )
+        self._log_text.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        # Tag colours
+        self._log_text.tag_config("success", foreground=GREEN)
+        self._log_text.tag_config("error",   foreground=RED)
+        self._log_text.tag_config("ban",     foreground=GOLD)
+        self._log_text.tag_config("warning", foreground=GOLD)
+        self._log_text.tag_config("pause",   foreground=PURPLE)
+        self._log_text.tag_config("info",    foreground=TEXT)
+
+    def _build_settings(self, parent):
+        row = 0
+
+        # Speed
+        tk.Label(parent, text="Speed:", fg=TEXT, bg=PANEL, font=FONTS["normal"]).grid(
+            row=row, column=0, sticky="w", padx=10, pady=4)
+        self._speed_var = tk.StringVar(value="normal")
+        speed_frame = tk.Frame(parent, bg=PANEL)
+        speed_frame.grid(row=row, column=1, columnspan=3, sticky="w", pady=4)
+        for lbl, val in [("Conservative (30s)", "conservative"), ("Normal (3s)", "normal"), ("Aggressive (1s)", "aggressive")]:
+            tk.Radiobutton(speed_frame, text=lbl, variable=self._speed_var, value=val,
+                           bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                           font=FONTS["small"]).pack(side="left", padx=4)
+        row += 1
+
+        # Health check
+        self._skip_unhealthy_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(parent, text="Skip accounts with health < 40 (unhealthy)",
+                       variable=self._skip_unhealthy_var,
+                       bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                       font=FONTS["normal"]).grid(row=row, column=0, columnspan=4, sticky="w", padx=10, pady=2)
+        row += 1
+
+        # On ban
+        tk.Label(parent, text="On ban:", fg=TEXT, bg=PANEL, font=FONTS["normal"]).grid(
+            row=row, column=0, sticky="w", padx=10, pady=4)
+        self._on_ban_var = tk.StringVar(value="auto_continue")
+        ban_frame = tk.Frame(parent, bg=PANEL)
+        ban_frame.grid(row=row, column=1, columnspan=3, sticky="w", pady=4)
+        for lbl, val in [("Auto-continue", "auto_continue"), ("Pause", "pause"), ("Stop", "stop")]:
+            tk.Radiobutton(ban_frame, text=lbl, variable=self._on_ban_var, value=val,
+                           bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                           font=FONTS["small"]).pack(side="left", padx=4)
+        row += 1
+
+        # Auto-leave
+        self._auto_leave_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(parent, text="Auto-leave group if banned",
+                       variable=self._auto_leave_var,
+                       bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                       font=FONTS["normal"]).grid(row=row, column=0, columnspan=4, sticky="w", padx=10, pady=2)
+        row += 1
+
+        # Skip already joined
+        self._skip_joined_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(parent, text="Skip groups already joined",
+                       variable=self._skip_joined_var,
+                       bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                       font=FONTS["normal"]).grid(row=row, column=0, columnspan=4, sticky="w", padx=10, pady=2)
+        row += 1
+
+        # Health check before start
+        self._health_before_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(parent, text="Check account health before starting",
+                       variable=self._health_before_var,
+                       bg=PANEL, fg=TEXT, selectcolor=CARD, activebackground=PANEL,
+                       font=FONTS["normal"]).grid(row=row, column=0, columnspan=4, sticky="w", padx=10, pady=2)
+        row += 1
+
+        save_row = tk.Frame(parent, bg=PANEL)
+        save_row.grid(row=row, column=0, columnspan=4, sticky="w", padx=10, pady=6)
+        tk.Button(save_row, text="💾 Save Settings", command=self._save_settings,
+                  bg=GREEN, fg="#000", font=FONTS["bold"], relief="flat", padx=8).pack(side="left", padx=4)
+        tk.Button(save_row, text="Default", command=self._reset_settings,
+                  bg=CARD, fg=TEXT, font=FONTS["small"], relief="flat", padx=6).pack(side="left", padx=4)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # SETTINGS PANEL TOGGLE
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _toggle_settings(self):
+        if self._settings_visible:
+            self._settings_frame.pack_forget()
+            self._settings_visible = False
+        else:
+            self._settings_frame.pack(fill="x", pady=(0, 6))
+            self._settings_visible = True
+
+    def _save_settings(self):
+        join_engine.settings["speed_preset"]          = self._speed_var.get()
+        join_engine.settings["skip_unhealthy"]        = self._skip_unhealthy_var.get()
+        join_engine.settings["on_ban"]                = self._on_ban_var.get()
+        join_engine.settings["auto_leave_on_ban"]     = self._auto_leave_var.get()
+        join_engine.settings["skip_already_joined"]   = self._skip_joined_var.get()
+        join_engine.settings["health_check_before_start"] = self._health_before_var.get()
+        join_engine.delay.set_preset(self._speed_var.get())
+        self._append_log("⚙ Settings saved", "info")
+
+    def _reset_settings(self):
+        self._speed_var.set("normal")
+        self._skip_unhealthy_var.set(True)
+        self._on_ban_var.set("auto_continue")
+        self._auto_leave_var.set(True)
+        self._skip_joined_var.set(True)
+        self._health_before_var.set(True)
+        self._save_settings()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # DATA LOADING
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _reload_accounts(self):
+        self._acc_listbox.delete(0, "end")
+        self._accounts_data = account_manager.get_accounts_by_feature("join")
+        if not self._accounts_data:
+            self._accounts_data = account_manager.get_all()
+        for a in self._accounts_data:
+            phone = a.get("phone") or a.get("name", "")
+            name  = a.get("name", phone)
+            h = get_health(phone) if phone else None
+            score = h["health_score"] if h else 100
+            icon  = "🟢" if score >= 70 else ("🟡" if score >= 40 else "🔴")
+            self._acc_listbox.insert("end", f"{icon} {name} [{score}/100]")
+
+    def _select_all_accounts(self):
+        self._acc_listbox.select_set(0, "end")
+
+    def _reload_groups(self):
+        self._grp_listbox.delete(0, "end")
+        self._groups_data = list_found_groups(only_unjoined=True)
+        for g in self._groups_data:
+            title = g.get("group_title") or g.get("title") or g.get("group_link", "")
+            link  = g.get("group_link", "")
+            members = g.get("member_count", 0)
+            self._grp_listbox.insert("end", f"{title[:35]}  [{members} 👥]  {link[:30]}")
+        self._grp_count_lbl.config(text=f"{len(self._groups_data)} groups")
+
+    def _select_all_groups(self):
+        self._grp_listbox.select_set(0, "end")
 
     def _on_source_change(self):
-        self._update_source_options()
-    
-    def _update_source_options(self):
-        for widget in self.source_options_frame.winfo_children():
-            widget.destroy()
-        
-        source = self.source_var.get()
-        
-        if source == "valid_txt":
-            valid_file = DATA_DIR / "groups" / "valid.txt"
-            count = 0
-            if valid_file.exists():
-                with open(valid_file, 'r', encoding='utf-8') as f:
-                    count = sum(1 for line in f if line.strip())
-            tk.Label(self.source_options_frame, text=f"📄 groups/valid.txt contains {count} groups",
-                    fg=COLORS["success"], bg=COLORS["bg_medium"]).pack(pady=10)
-        
-        elif source == "import_txt":
-            self.import_file_var = tk.StringVar()
-            file_frame = tk.Frame(self.source_options_frame, bg=COLORS["bg_medium"])
-            file_frame.pack(pady=10)
-            
-            tk.Entry(file_frame, textvariable=self.import_file_var, width=40,
-                    bg=COLORS["bg_light"], fg=COLORS["text"]).pack(side="left", padx=5)
-            tk.Button(file_frame, text="📂 Browse", command=self._browse_import_file,
-                     bg=COLORS["info"], fg="white").pack(side="left", padx=5)
-        
-        elif source == "custom":
-            tk.Label(self.source_options_frame, text="Enter group links (one per line):",
-                    fg=COLORS["text"], bg=COLORS["bg_medium"]).pack(pady=5)
-            
-            self.custom_groups_text = scrolledtext.ScrolledText(self.source_options_frame,
-                                                                 height=6, bg=COLORS["bg_light"],
-                                                                 fg=COLORS["text"])
-            self.custom_groups_text.pack(fill="x", padx=10, pady=5)
-    
-    def _browse_import_file(self):
-        filepath = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
-        if filepath:
-            self.import_file_var.set(filepath)
-    
-    def _load_account_lists(self):
-        self.available_accounts.delete(0, "end")
-        self.assigned_accounts.delete(0, "end")
+        src = self._grp_source_var.get()
+        if src == "finder":
+            self._manual_frame.pack_forget()
+            self._file_frame.pack_forget()
+        elif src == "manual":
+            self._manual_frame.pack(fill="x", padx=8, pady=(0, 4))
+            self._file_frame.pack_forget()
+        else:
+            self._manual_frame.pack_forget()
+            self._file_frame.pack(fill="x", padx=8, pady=(0, 4))
 
-        assigned_names = {a['name'] for a in account_manager.get_accounts_by_feature("join")}
+    def _browse_file(self):
+        path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All", "*.*")])
+        if path:
+            self._file_var.set(path)
 
-        for acc in account_manager.get_all():
-            display = f"{acc['name']} (L{acc.get('level', 1)})"
-            if acc['name'] in assigned_names:
-                self.assigned_accounts.insert("end", acc['name'])
-            else:
-                self.available_accounts.insert("end", display)
+    def _get_selected_accounts(self) -> list:
+        sel = self._acc_listbox.curselection()
+        if not sel:
+            # fallback: all
+            sel = list(range(len(self._accounts_data)))
+        result = []
+        for i in sel:
+            if i < len(self._accounts_data):
+                result.append(self._accounts_data[i])
+        return result
 
-    def _assign_join_accounts(self):
-        selection = self.available_accounts.curselection()
-        if not selection:
-            messagebox.showwarning("Warning", "Select accounts first!")
+    def _get_groups_to_join(self) -> list:
+        src = self._grp_source_var.get()
+        if src == "finder":
+            sel = self._grp_listbox.curselection()
+            if not sel:
+                sel = list(range(len(self._groups_data)))
+            return [
+                {
+                    "group_link":  self._groups_data[i].get("group_link", ""),
+                    "group_title": self._groups_data[i].get("group_title") or self._groups_data[i].get("title", ""),
+                    "member_count": self._groups_data[i].get("member_count", 0),
+                }
+                for i in sel if i < len(self._groups_data)
+            ]
+        if src == "manual":
+            lines = self._manual_text.get("1.0", "end").strip().splitlines()
+            return [{"group_link": l.strip(), "group_title": l.strip()} for l in lines if l.strip()]
+        # file
+        path = self._file_var.get().strip()
+        if not path or not Path(path).exists():
+            return []
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+        return [{"group_link": l, "group_title": l} for l in lines]
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # HEALTH CHECK
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _run_health_check(self):
+        accounts = self._get_selected_accounts()
+        if not accounts:
+            messagebox.showwarning("Health Check", "No accounts selected.")
             return
+        self._health_check_btn.config(state="disabled", text="🩺 Checking…")
+        phones = [a.get("phone") or a.get("name", "") for a in accounts]
 
-        for i in selection:
-            display = self.available_accounts.get(i)
-            name = display.split(" (")[0]
-            account_manager.assign_feature(name, "join")
+        def _on_result(r):
+            def _upd():
+                self._append_log(
+                    f"🩺 {r.get('phone','?')} → {r.get('status','?')} [{r.get('health_score',0)}/100]",
+                    "success" if r.get("status") == "active" else "warning",
+                )
+            self.frame.after(0, _upd)
 
-        self._load_account_lists()
-        messagebox.showinfo("Success", "Accounts assigned to Join")
+        def _on_done(results):
+            def _fin():
+                self._reload_accounts()
+                self._health_check_btn.config(state="normal", text="🩺 Check Health")
+                self._append_log(f"🩺 Health check complete ({len(results)} accounts)", "info")
+            self.frame.after(0, _fin)
 
-    def _remove_join_accounts(self):
-        selection = self.assigned_accounts.curselection()
-        if not selection:
-            return
+        check_accounts_health(phones, on_result=_on_result, on_done=_on_done)
 
-        for i in reversed(selection):
-            name = self.assigned_accounts.get(i)
-            account_manager.remove_feature(name, "join")
+    # ──────────────────────────────────────────────────────────────────────────
+    # JOIN CONTROL
+    # ──────────────────────────────────────────────────────────────────────────
 
-        self._load_account_lists()
-    
-    def _load_groups_to_join(self):
-        source = self.source_var.get()
-        self.groups_to_join = []
-        
-        if source == "valid_txt":
-            valid_file = DATA_DIR / "groups" / "valid.txt"
-            if valid_file.exists():
-                with open(valid_file, 'r', encoding='utf-8') as f:
-                    self.groups_to_join = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-            else:
-                messagebox.showwarning("Warning", "groups/valid.txt not found!\n\nUse Finder tab first.")
-                return False
-        
-        elif source == "import_txt":
-            filepath = self.import_file_var.get()
-            if not filepath:
-                messagebox.showwarning("Warning", "Select a file first!")
-                return False
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    self.groups_to_join = [line.strip() for line in f if line.strip()]
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to load file: {e}")
-                return False
-        
-        elif source == "custom":
-            if hasattr(self, 'custom_groups_text'):
-                text = self.custom_groups_text.get("1.0", "end-1c")
-                self.groups_to_join = [line.strip() for line in text.split("\n") if line.strip()]
-            if not self.groups_to_join:
-                messagebox.showwarning("Warning", "Enter group links first!")
-                return False
-        
-        return True
-    
     def _start_join(self):
-        assigned = [self.assigned_accounts.get(i) for i in range(self.assigned_accounts.size())]
-        if not assigned:
-            messagebox.showwarning("Warning", 
-                "No accounts assigned to Join!\n\n"
-                "Go to Accounts tab → Select accounts → Assign Join")
+        # Check for resumable session
+        ri = persistent_queue.resume_info()
+        if ri and ri.get("completed", 0) < ri.get("total", 0):
+            completed = ri.get("completed", 0)
+            total     = ri.get("total", 0)
+            answer = messagebox.askyesnocancel(
+                "Resume Session",
+                f"⟳ Resume interrupted session?\n\n"
+                f"Completed: {completed}/{total} groups\n"
+                f"Started: {ri.get('created_at', 'unknown')}\n\n"
+                "Yes = Resume   No = Start fresh   Cancel = Abort",
+            )
+            if answer is None:
+                return
+            if answer:
+                self._do_start(resume=True)
+                return
+
+        # Fresh start
+        accounts = self._get_selected_accounts()
+        groups   = self._get_groups_to_join()
+
+        if not accounts:
+            messagebox.showwarning("Start Join", "No accounts available. Assign accounts in the Accounts tab.")
             return
-        
-        if not self._load_groups_to_join():
+        if not groups:
+            messagebox.showwarning("Start Join", "No groups selected.")
             return
-        
-        max_join = int(self.max_join.get() or 50)
-        delay_min = int(self.delay_min.get() or 30)
-        delay_max = int(self.delay_max.get() or 60)
-        smart_join = self.smart_join_var.get()
-        
-        self.running = True
-        self.status_label.config(text=f"📤 Joining...", fg=COLORS["warning"])
-        self.start_btn.config(state="disabled")
-        self.stop_btn.config(state="normal")
-        
-        log(f"📤 JOIN STARTED", "success")
-        
-        def join():
-            joined = 0
-            skipped = 0
-            failed = 0
-            
-            for i, group in enumerate(self.groups_to_join[:max_join]):
-                if not self.running:
-                    break
-                
-                account_name = assigned[i % len(assigned)]
-                
-                try:
-                    if smart_join:
-                        existing = load_groups()
-                        if group in existing:
-                            skipped += 1
-                            self.frame.after(0, lambda g=group: self._add_join_result(g, "Skipped", "-"))
-                            self.frame.after(0, lambda j=joined, s=skipped, f=failed: self._update_join_stats(j, s, f))
-                            continue
-                    
-                    log(f"📤 [{i+1}/{len(self.groups_to_join)}] {account_name} → {group}", "info")
-                    
-                    import time
-                    import random
-                    time.sleep(random.uniform(delay_min, delay_max) / 10)
-                    
-                    joined += 1
-                    
-                    self.frame.after(0, lambda g=group, a=account_name: self._add_join_result(g, "Joined", a))
-                    self.frame.after(0, lambda j=joined, s=skipped, f=failed: self._update_join_stats(j, s, f))
-                    
-                except Exception as e:
-                    failed += 1
-                    self.frame.after(0, lambda g=group: self._add_join_result(g, f"Failed", "-"))
-            
-            self.frame.after(0, self._join_complete)
-        
-        threading.Thread(target=join, daemon=True).start()
-    
-    def _add_join_result(self, group, status, account):
-        from datetime import datetime
-        self.results_tree.insert("", "end", values=(
-            group,
-            status,
-            account,
-            datetime.now().strftime("%H:%M:%S")
-        ))
-        self.results_tree.see("end")
-    
-    def _update_join_stats(self, joined, skipped, failed):
-        self.results_stats.config(text=f"Joined: {joined} | Skipped: {skipped} | Failed: {failed}")
-        progress = (joined / len(self.groups_to_join)) * 100 if self.groups_to_join else 0
-        self.progress['value'] = progress
-    
-    def _join_complete(self):
-        self.running = False
-        self.status_label.config(text="✅ Join complete!", fg=COLORS["success"])
-        self.progress['value'] = 100
-        self.start_btn.config(state="normal")
-        self.stop_btn.config(state="disabled")
-        log("✅ JOIN COMPLETED", "success")
-        messagebox.showinfo("Join Complete", "All groups processed!")
-    
+
+        self._do_start(resume=False, accounts=accounts, groups=groups)
+
+    def _do_start(self, resume: bool, accounts=None, groups=None):
+        self._save_settings()
+        self._set_buttons_running()
+
+        def _on_update(stats: JoinStats):
+            self.frame.after(0, lambda s=stats: self._update_stats(s))
+
+        def _on_done(stats: JoinStats):
+            def _done():
+                self._set_buttons_idle()
+                self._retry_btn.config(state="normal")
+                if stats:
+                    self._update_stats(stats)
+                    self._append_log(
+                        f"✅ Session complete — {stats.joined} joined, {stats.failed} failed, {stats.banned} banned",
+                        "success",
+                    )
+                self._reload_groups()
+                self._stop_polling()
+            self.frame.after(0, _done)
+
+        if resume:
+            join_engine.start(accounts=[], groups=[], on_update=_on_update, on_done=_on_done, resume=True)
+        else:
+            join_engine.start(
+                accounts=accounts or [],
+                groups=groups or [],
+                on_update=_on_update,
+                on_done=_on_done,
+                resume=False,
+            )
+        self._start_polling()
+
+    def _pause_join(self):
+        join_engine.pause()
+        self._pause_btn.config(state="disabled")
+        self._resume_btn.config(state="normal")
+        self._append_log("⏸ Session paused", "pause")
+
+    def _resume_join(self):
+        join_engine.resume()
+        self._resume_btn.config(state="disabled")
+        self._pause_btn.config(state="normal")
+        self._append_log("▶ Session resumed", "info")
+
     def _stop_join(self):
-        self.running = False
-        self.status_label.config(text="⏹️ Stopped", fg=COLORS["error"])
-        self.start_btn.config(state="normal")
-        self.stop_btn.config(state="disabled")
-        log("⏹️ Join stopped by user", "warning")
-    
-    def _view_joined(self):
-        existing = load_groups()
-        messagebox.showinfo("Joined Groups", f"Total groups in database: {len(existing)}")
-    
-    def _refresh(self):
-        self._load_account_lists()
+        join_engine.stop()
+        self._set_buttons_idle()
+        self._append_log("⏹ Session stopped by user", "warning")
+        self._stop_polling()
+
+    def _retry_failed(self):
+        """Reload unjoined groups and start a fresh session."""
+        self._reload_groups()
+        accounts = self._get_selected_accounts()
+        groups   = self._get_groups_to_join()
+        if not groups:
+            messagebox.showinfo("Retry", "No pending groups found.")
+            return
+        persistent_queue.clear()
+        self._do_start(resume=False, accounts=accounts, groups=groups)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # STATS POLLING
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _start_polling(self):
+        self._stop_polling()
+        self._poll_stats()
+
+    def _stop_polling(self):
+        if self._update_job is not None:
+            try:
+                self.frame.after_cancel(self._update_job)
+            except Exception:
+                pass
+            self._update_job = None
+
+    def _poll_stats(self):
+        if join_engine.stats:
+            self._update_stats(join_engine.stats)
+        if join_engine.running:
+            self._update_job = self.frame.after(2000, self._poll_stats)
+
+    def _update_stats(self, stats: JoinStats):
+        total     = stats.total or 1
+        completed = stats.completed
+        pct       = int(completed / total * 100)
+
+        self._progress_bar["value"] = pct
+        self._progress_pct_lbl.config(
+            text=f"{pct}%  ({completed}/{total})"
+        )
+
+        for key in ("joined", "failed", "banned", "skipped"):
+            self._stat_vars[key].set(str(getattr(stats, key, 0)))
+        pending = total - completed
+        self._stat_vars["pending"].set(str(max(0, pending)))
+
+        # ETA
+        eta = stats.eta_seconds
+        if eta is None:
+            eta_str = "—"
+        elif eta <= 0:
+            eta_str = "Done"
+        else:
+            mins = int(eta // 60)
+            secs = int(eta % 60)
+            eta_str = f"{mins}m {secs}s"
+
+        self._eta_lbl.config(text=f"ETA: {eta_str}")
+        self._speed_lbl.config(text=f"Speed: {stats.speed} joins/min")
+        self._delay_lbl.config(text=f"Delay: {join_engine.delay.current_delay:.0f}s")
+        if stats.current_account:
+            self._current_lbl.config(
+                text=f"→ {stats.current_account} [{stats.current_health}/100] → {stats.current_group[:30]}"
+            )
+
+        # Update log (prepend new entries)
+        self._refresh_log(stats.log)
+
+    def _refresh_log(self, log_entries: list):
+        """Efficiently refresh log from stats.log list (newest first already)."""
+        # We keep our own count to avoid redundant refreshes
+        current_count = getattr(self, "_last_log_count", 0)
+        new_entries = log_entries[:len(log_entries) - current_count]
+        if not new_entries:
+            return
+        self._last_log_count = len(log_entries)
+        self._log_text.config(state="normal")
+        for entry in new_entries:
+            tag   = entry.get("level", "info")
+            ts    = entry.get("ts", "")
+            msg   = entry.get("msg", "")
+            line  = f"[{ts}] {msg}\n"
+            self._log_text.insert("1.0", line, tag)
+        # Trim
+        lines = int(self._log_text.index("end-1c").split(".")[0])
+        if lines > 800:
+            self._log_text.delete(f"{800}.0", "end")
+        self._log_text.config(state="disabled")
+
+    def _append_log(self, msg: str, level: str = "info"):
+        ts   = datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}\n"
+        self._log_text.config(state="normal")
+        self._log_text.insert("1.0", line, level)
+        self._log_text.config(state="disabled")
+
+    def _clear_log(self):
+        self._log_text.config(state="normal")
+        self._log_text.delete("1.0", "end")
+        self._log_text.config(state="disabled")
+        self._last_log_count = 0
+
+    def _copy_log(self):
+        content = self._log_text.get("1.0", "end")
+        self.frame.clipboard_clear()
+        self.frame.clipboard_append(content)
+        self._append_log("📋 Log copied to clipboard", "info")
+
+    def _save_log(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+            initialfile=f"join_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+        )
+        if path:
+            content = self._log_text.get("1.0", "end")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            self._append_log(f"💾 Log saved to {path}", "info")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # BUTTON STATES
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _set_buttons_running(self):
+        self._start_btn.config(state="disabled")
+        self._pause_btn.config(state="normal")
+        self._resume_btn.config(state="disabled")
+        self._stop_btn.config(state="normal")
+        self._retry_btn.config(state="disabled")
+
+    def _set_buttons_idle(self):
+        self._start_btn.config(state="normal")
+        self._pause_btn.config(state="disabled")
+        self._resume_btn.config(state="disabled")
+        self._stop_btn.config(state="disabled")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # MISC
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _on_tab_selected(self):
+        self._reload_accounts()
+        self._reload_groups()
 
     def _on_account_changed(self, data=None):
-        """Refresh when account assignments change"""
         try:
-            self._load_join_accounts()
-        except Exception:
-            pass
-
-    def _load_join_accounts(self):
-        """Load accounts assigned to join feature"""
-        try:
-            join_accs = account_manager.get_accounts_by_feature("join")
-            if hasattr(self, 'account_combo'):
-                all_accs = [a.get("name", "") for a in account_manager.get_all()]
-                join_names = [a.get("name", "") for a in join_accs]
-                vals = join_names if join_names else all_accs
-                self.account_combo['values'] = vals
-                if vals and not self.account_combo.get():
-                    self.account_combo.set(vals[0])
+            self._reload_accounts()
         except Exception:
             pass

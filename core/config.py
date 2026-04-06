@@ -53,6 +53,48 @@ def init_databases():
                 UNIQUE(account_phone, group_link)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS account_health (
+                account_phone   TEXT PRIMARY KEY,
+                account_name    TEXT DEFAULT '',
+                health_score    INTEGER DEFAULT 100,
+                status          TEXT DEFAULT 'unknown',
+                last_checked    TEXT DEFAULT NULL,
+                join_attempts   INTEGER DEFAULT 0,
+                join_success    INTEGER DEFAULT 0,
+                join_failed     INTEGER DEFAULT 0,
+                banned_from     INTEGER DEFAULT 0,
+                last_error      TEXT DEFAULT ''
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS join_queue (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id    TEXT DEFAULT '',
+                group_name  TEXT DEFAULT '',
+                group_link  TEXT NOT NULL,
+                account_id  TEXT DEFAULT '',
+                status      TEXT DEFAULT 'pending',
+                reason      TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now')),
+                joined_at   TEXT DEFAULT NULL,
+                failed_at   TEXT DEFAULT NULL,
+                updated_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS join_session (
+                session_id      TEXT PRIMARY KEY,
+                created_at      TEXT DEFAULT (datetime('now')),
+                completed_at    TEXT DEFAULT NULL,
+                total_groups    INTEGER DEFAULT 0,
+                successfully_joined INTEGER DEFAULT 0,
+                failed          INTEGER DEFAULT 0,
+                banned          INTEGER DEFAULT 0,
+                status          TEXT DEFAULT 'running',
+                queue_state     TEXT DEFAULT '{}'
+            )
+        """)
         conn.commit()
 
     # Groups DB
