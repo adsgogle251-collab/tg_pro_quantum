@@ -30,11 +30,13 @@ STATUS_COLORS = {
 
 class AccountTab:
     title = "👤 Accounts"
+    _COL_PHONE = 2  # index of the Phone column in the Treeview (after ☑, Name)
 
     def __init__(self, parent, main_window=None):
         self.parent = parent
         self.main_window = main_window
         self.frame = ttk.Frame(parent)
+        self._checked_phones: set[str] = set()
         self._build()
         self._refresh()
 
@@ -55,6 +57,8 @@ class AccountTab:
                  color=GREEN, fg="#000").pack(side="left", padx=4)
         make_btn(btn_row, "🔄 Refresh", command=self._refresh,
                  color=CYAN, fg="#000").pack(side="left", padx=4)
+        make_btn(btn_row, "☑ Select All", command=self._select_all,
+                 color=PANEL).pack(side="left", padx=4)
         make_btn(btn_row, "🩺 Health Check", command=self._health_check,
                  color=ORANGE, fg="#000").pack(side="left", padx=4)
         make_btn(btn_row, "🗑️ Delete", command=self._delete,
@@ -65,16 +69,24 @@ class AccountTab:
         tk.Label(outer, textvariable=self._status_var,
                  font=FONTS["normal"], fg=GREEN, bg=BG).pack(anchor="w", pady=(0, 6))
 
-        # Table
-        cols = ("Name", "Phone", "Status", "Session", "Created")
-        self._tree = ttk.Treeview(outer, columns=cols, show="headings", height=20)
-        widths = {"Name": 160, "Phone": 130, "Status": 90, "Session": 260, "Created": 150}
+        # Table  (first column = checkbox)
+        cols = ("☑", "Name", "Phone", "Status", "Session", "Created")
+        self._tree = ttk.Treeview(outer, columns=cols, show="headings",
+                                  height=20, selectmode="extended")
+        widths = {"☑": 35, "Name": 160, "Phone": 130, "Status": 90,
+                  "Session": 240, "Created": 150}
         for c in cols:
             self._tree.heading(c, text=c)
             self._tree.column(c, width=widths[c], anchor="center")
         self._tree.tag_configure("active",  foreground=GREEN)
         self._tree.tag_configure("expired", foreground=ORANGE)
         self._tree.tag_configure("error",   foreground=RED)
+
+        # Toggle checkbox on click
+        self._tree.bind("<Button-1>", self._on_tree_click)
+        # Select all with Ctrl+A
+        self._tree.bind("<Control-a>", lambda e: self._select_all())
+        self._tree.bind("<Control-A>", lambda e: self._select_all())
 
         sb = ttk.Scrollbar(outer, orient="vertical", command=self._tree.yview)
         self._tree.configure(yscrollcommand=sb.set)
@@ -93,8 +105,10 @@ class AccountTab:
             status = acc.get("status", "active")
             sf = acc.get("session_file") or ""
             created = (acc.get("created_at") or "")[:16]
+            phone = acc["phone"]
+            check = "☑" if phone in self._checked_phones else "☐"
             self._tree.insert("", "end",
-                values=(acc["name"], acc["phone"], status, sf, created),
+                values=(check, acc["name"], phone, status, sf, created),
                 tags=(status,))
         self._status_var.set(f"Loaded {len(accounts)} accounts.")
 
@@ -102,12 +116,45 @@ class AccountTab:
         """Public method to reload the account list from outside this tab."""
         self._refresh()
 
+    def _on_tree_click(self, event):
+        """Toggle the checkbox when the ☑ column is clicked."""
+        col = self._tree.identify_column(event.x)
+        if col == "#1":  # first column = checkbox
+            item = self._tree.identify_row(event.y)
+            if item:
+                vals = list(self._tree.item(item, "values"))
+                phone = vals[self._COL_PHONE]
+                if phone in self._checked_phones:
+                    self._checked_phones.discard(phone)
+                    vals[0] = "☐"
+                else:
+                    self._checked_phones.add(phone)
+                    vals[0] = "☑"
+                self._tree.item(item, values=vals)
+
+    def _select_all(self):
+        """Toggle: check all if any are unchecked, otherwise uncheck all."""
+        all_items = self._tree.get_children()
+        all_phones = {self._tree.item(i, "values")[self._COL_PHONE] for i in all_items}
+        if all_phones == self._checked_phones:
+            # Deselect all
+            self._checked_phones.clear()
+            mark = "☐"
+        else:
+            # Select all
+            self._checked_phones = all_phones.copy()
+            mark = "☑"
+        for item in all_items:
+            vals = list(self._tree.item(item, "values"))
+            vals[0] = mark
+            self._tree.item(item, values=vals)
+
     def _selected_phone(self) -> str | None:
         sel = self._tree.selection()
         if not sel:
             messagebox.showwarning("Select", "Select an account first.")
             return None
-        return self._tree.item(sel[0], "values")[1]
+        return self._tree.item(sel[0], "values")[self._COL_PHONE]
 
     # ─────────────────────────────────────────────────────────────────────────
     # OTP Add Account dialog
@@ -117,14 +164,28 @@ class AccountTab:
 
     # ─────────────────────────────────────────────────────────────────────────
     def _delete(self):
-        phone = self._selected_phone()
-        if not phone:
-            return
-        if not messagebox.askyesno("Confirm", f"Delete account {phone}?"):
-            return
-        delete_account(phone)
-        self._status_var.set(f"Deleted {phone}.")
-        self._refresh()
+        if self._checked_phones:
+            phones = list(self._checked_phones)
+            n = len(phones)
+            if not messagebox.askyesno(
+                "Confirm",
+                f"Delete {n} account{'s' if n > 1 else ''}? Confirm?"
+            ):
+                return
+            for phone in phones:
+                delete_account(phone)
+            self._checked_phones.clear()
+            self._status_var.set(f"Deleted {n} account{'s' if n > 1 else ''}.")
+            self._refresh()
+        else:
+            phone = self._selected_phone()
+            if not phone:
+                return
+            if not messagebox.askyesno("Confirm", f"Delete account {phone}?"):
+                return
+            delete_account(phone)
+            self._status_var.set(f"Deleted {phone}.")
+            self._refresh()
 
     def _health_check(self):
         phone = self._selected_phone()
@@ -157,18 +218,18 @@ class OTPDialog(tk.Toplevel):
         self._step = "phone"  # or "otp" or "2fa"
         self._build()
         self.update_idletasks()
-        # Center
-        w, h = 420, 360
+        # Center — wider dialog for better readability
+        w, h = 550, 420
         x = self.winfo_screenwidth()  // 2 - w // 2
         y = self.winfo_screenheight() // 2 - h // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
 
     def _build(self):
         self._container = tk.Frame(self, bg=BG)
-        self._container.pack(fill="both", expand=True, padx=24, pady=24)
+        self._container.pack(fill="both", expand=True, padx=30, pady=24)
 
         tk.Label(self._container, text="Add Telegram Account",
-                 font=FONTS["heading"], fg=CYAN, bg=BG).pack(pady=(0, 16))
+                 font=FONTS["heading"], fg=CYAN, bg=BG).pack(pady=(0, 18))
 
         # Phone
         tk.Label(self._container, text="Phone number (with country code):",
@@ -177,9 +238,9 @@ class OTPDialog(tk.Toplevel):
         self._phone_entry = tk.Entry(
             self._container, textvariable=self._phone_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["normal"], width=30, relief="flat"
+            font=FONTS["subheading"], width=36, relief="flat"
         )
-        self._phone_entry.pack(fill="x", pady=(4, 12))
+        self._phone_entry.pack(fill="x", ipady=5, pady=(4, 14))
         self._phone_entry.focus()
 
         # Display name
@@ -189,8 +250,8 @@ class OTPDialog(tk.Toplevel):
         tk.Entry(
             self._container, textvariable=self._name_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["normal"], width=30, relief="flat"
-        ).pack(fill="x", pady=(4, 12))
+            font=FONTS["subheading"], width=36, relief="flat"
+        ).pack(fill="x", ipady=5, pady=(4, 14))
 
         # OTP frame (hidden initially)
         self._otp_frame = tk.Frame(self._container, bg=BG)
@@ -200,9 +261,9 @@ class OTPDialog(tk.Toplevel):
         self._otp_entry = tk.Entry(
             self._otp_frame, textvariable=self._otp_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["normal"], width=20, relief="flat"
+            font=FONTS["subheading"], width=24, relief="flat"
         )
-        self._otp_entry.pack(fill="x", pady=(4, 12))
+        self._otp_entry.pack(fill="x", ipady=5, pady=(4, 14))
 
         # 2FA frame (hidden initially)
         self._twofa_frame = tk.Frame(self._container, bg=BG)
@@ -213,17 +274,17 @@ class OTPDialog(tk.Toplevel):
             self._twofa_frame, textvariable=self._pass_var,
             show="*",
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["normal"], width=30, relief="flat"
-        ).pack(fill="x", pady=(4, 12))
+            font=FONTS["subheading"], width=36, relief="flat"
+        ).pack(fill="x", ipady=5, pady=(4, 14))
 
-        # Status
+        # Status message
         self._status_var = tk.StringVar(value="")
         tk.Label(
             self._container, textvariable=self._status_var,
-            font=FONTS["small"], fg=GREEN, bg=BG, wraplength=370
-        ).pack(anchor="w", pady=(0, 8))
+            font=FONTS["normal"], fg=GREEN, bg=BG, wraplength=490, justify="left"
+        ).pack(anchor="w", pady=(0, 10))
 
-        # Button row
+        # Button row — Action | Retry (hidden initially) | Cancel
         btn_row = tk.Frame(self._container, bg=BG)
         btn_row.pack(fill="x")
         self._action_btn = make_btn(
@@ -231,7 +292,13 @@ class OTPDialog(tk.Toplevel):
             color=CYAN, fg="#000"
         )
         self._action_btn.pack(side="left", padx=(0, 8))
-        make_btn(btn_row, "Cancel", command=self.destroy,
+        self._retry_btn = make_btn(
+            btn_row, "🔄 Retry", command=self._on_retry,
+            color=ORANGE, fg="#000"
+        )
+        self._retry_btn.pack(side="left", padx=(0, 8))
+        self._retry_btn.pack_forget()  # hidden until needed
+        make_btn(btn_row, "✖ Cancel", command=self.destroy,
                  color=CARD).pack(side="left")
 
     def _on_action(self):
@@ -266,12 +333,13 @@ class OTPDialog(tk.Toplevel):
                     self._status_var.set(f"✅ Account {name} added (already authorized).")
                     self.after(1200, self._finish)
                     return
-                # Show OTP field
+                # Show OTP field and Retry button
                 self._step = "otp"
-                self._otp_frame.pack(fill="x", pady=(0, 8))
+                self._otp_frame.pack(fill="x", pady=(0, 10))
                 self._otp_entry.focus()
                 self._action_btn.config(text="✅ Verify OTP")
-                self._status_var.set("✅ OTP sent! Check your phone.")
+                self._retry_btn.pack(side="left", padx=(0, 8))
+                self._status_var.set("✅ OTP sent! Enter the code from your phone.")
             self.after(0, after)
 
         threading.Thread(target=task, daemon=True).start()
@@ -283,7 +351,7 @@ class OTPDialog(tk.Toplevel):
         if not code:
             messagebox.showwarning("Missing", "Enter OTP code.", parent=self)
             return
-        self._status_var.set("Verifying...")
+        self._status_var.set("Verifying OTP...")
         self._action_btn.config(state="disabled")
 
         def task():
@@ -293,11 +361,15 @@ class OTPDialog(tk.Toplevel):
                 if not ok:
                     if msg == "2FA_required":
                         self._step = "2fa"
-                        self._twofa_frame.pack(fill="x", pady=(0, 8))
+                        self._twofa_frame.pack(fill="x", pady=(0, 10))
                         self._action_btn.config(text="🔓 Verify 2FA")
-                        self._status_var.set("🔐 2FA password required.")
+                        self._status_var.set("🔐 2FA password required. Enter it below.")
                     else:
-                        self._status_var.set(f"❌ {msg}")
+                        self._status_var.set(
+                            f"❌ {msg}  ·  Click Retry to resend or enter a new code."
+                        )
+                        # Ensure Retry is visible so user knows how to proceed
+                        self._retry_btn.pack(side="left", padx=(0, 8))
                     return
                 self._status_var.set(f"✅ {msg}")
                 self.after(1200, self._finish)
@@ -321,13 +393,36 @@ class OTPDialog(tk.Toplevel):
             def after():
                 self._action_btn.config(state="normal")
                 if not ok:
-                    self._status_var.set(f"❌ {msg}")
+                    self._status_var.set(
+                        f"❌ {msg}  ·  Click Retry to go back to OTP entry."
+                    )
                     return
                 self._status_var.set(f"✅ {msg}")
                 self.after(1200, self._finish)
             self.after(0, after)
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _on_retry(self):
+        """Retry: if in OTP step resend OTP; if in 2FA step go back to OTP."""
+        if self._step == "2fa":
+            # Go back to OTP entry
+            self._twofa_frame.pack_forget()
+            self._pass_var.set("")
+            self._otp_var.set("")
+            self._step = "otp"
+            self._action_btn.config(text="✅ Verify OTP", state="normal")
+            self._otp_entry.focus()
+            self._status_var.set("Enter a new OTP code or click 'Send OTP' again.")
+        else:
+            # Reset to phone step so user can resend
+            self._otp_frame.pack_forget()
+            self._otp_var.set("")
+            self._step = "phone"
+            self._action_btn.config(text="📤 Send OTP", state="normal")
+            self._retry_btn.pack_forget()
+            self._phone_entry.focus()
+            self._status_var.set("Enter your phone number and click 'Send OTP' to resend.")
 
     def _finish(self):
         if self.on_success:
