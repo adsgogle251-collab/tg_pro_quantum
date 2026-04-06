@@ -33,11 +33,18 @@ class BroadcastStats:
         self.pending = 0
         self.rounds = 0
         self.log: list[str] = []
-        # Live mapping tracking
-        self.mapping_entries: list[dict] = []   # newest first
+        # Live mapping tracking – dict for O(1) upserts, list for ordered display
+        self._mapping_dict: dict = {}       # (account, group) -> entry
+        self._mapping_order: list = []      # keys in newest-first insertion order
         self.start_time: Optional[datetime] = None
         self._total_groups: int = 0
-        self.failed_groups: list[str] = []      # groups that failed, for retry
+        self.failed_groups: list[str] = []  # groups that failed, for retry
+
+    @property
+    def mapping_entries(self) -> list:
+        """Return mapping entries in newest-first insertion order."""
+        return [self._mapping_dict[k] for k in self._mapping_order
+                if k in self._mapping_dict]
 
     def add_log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -47,7 +54,7 @@ class BroadcastStats:
 
     def add_mapping(self, account: str, group: str, status: str,
                     link: str, msg_preview: str = "") -> None:
-        """Add or update an account→group mapping entry (newest first)."""
+        """Add or update an account→group mapping entry (O(1) via dict keying)."""
         ts = datetime.now().strftime("%H:%M:%S")
         entry = {
             "account": account,
@@ -57,18 +64,20 @@ class BroadcastStats:
             "timestamp": ts,
             "msg_preview": msg_preview[:50] if msg_preview else "",
         }
-        for i, e in enumerate(self.mapping_entries):
-            if e["account"] == account and e["group"] == group:
-                self.mapping_entries[i] = entry
-                return
-        self.mapping_entries.insert(0, entry)
-        if len(self.mapping_entries) > 500:
-            self.mapping_entries = self.mapping_entries[:500]
+        key = (account, group)
+        if key in self._mapping_dict:
+            self._mapping_dict[key] = entry   # O(1) update, order unchanged
+        else:
+            self._mapping_dict[key] = entry   # O(1) insert
+            self._mapping_order.insert(0, key)
+            if len(self._mapping_order) > 500:
+                old_key = self._mapping_order.pop()
+                self._mapping_dict.pop(old_key, None)
 
     @property
     def speed_msg_per_min(self) -> float:
         """Messages sent per minute since broadcast started."""
-        if not self.start_time or self.sent == 0:
+        if not self.start_time:
             return 0.0
         elapsed = (datetime.now() - self.start_time).total_seconds() / 60.0
         return round(self.sent / elapsed, 1) if elapsed > 0 else 0.0

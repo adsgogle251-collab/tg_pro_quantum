@@ -38,6 +38,19 @@ def _fmt_eta(seconds: int) -> str:
     return f"{s}s"
 
 
+def _log_fg_color(text: str) -> str:
+    """Return a foreground color for a log or status entry text."""
+    if "✅" in text or "sent" in text.lower():
+        return GREEN
+    if "🚫" in text or "banned" in text.lower() or "peerflood" in text.lower():
+        return PURPLE
+    if "❌" in text or "failed" in text.lower() or "expired" in text.lower():
+        return RED
+    if "⏳" in text or "🔄" in text or "▶" in text or "⚠️" in text or "slowmode" in text.lower():
+        return GOLD
+    return MUTED
+
+
 class BroadcastTab:
     title = "📢 Broadcast"
 
@@ -316,8 +329,11 @@ class BroadcastTab:
         make_btn(filter_row, "📋 Copy Link",  command=self._copy_link,    color=CARD).pack(side="right", padx=2)
         make_btn(filter_row, "🗑 Clear",       command=self._clear_mapping, color=CARD).pack(side="right", padx=2)
 
-        # Treeview columns
-        MAP_COLS = ("Account", "Group", "Status", "Link", "Time", "Message")
+        # Treeview columns – two hidden ones store full link + group for copy operations
+        # Visible columns: Account, Group, Status, Link, Time, Message
+        # Hidden columns:  _fulllink, _fullgroup (width=0, no heading)
+        ALL_COLS = ("Account", "Group", "Status", "Link", "Time", "Message", "_fulllink", "_fullgroup")
+        VIS_COLS = ALL_COLS[:6]
         tree_frame = tk.Frame(map_frame, bg=PANEL)
         tree_frame.pack(fill="both", expand=True, padx=8, pady=(2, 6))
 
@@ -327,7 +343,7 @@ class BroadcastTab:
         hsb.pack(side="bottom", fill="x")
 
         self._map_tree = ttk.Treeview(
-            tree_frame, columns=MAP_COLS, show="headings",
+            tree_frame, columns=ALL_COLS, displaycolumns=VIS_COLS, show="headings",
             yscrollcommand=vsb.set, xscrollcommand=hsb.set,
             height=8, selectmode="browse",
         )
@@ -338,10 +354,13 @@ class BroadcastTab:
             "Account": 110, "Group": 180, "Status": 95,
             "Link": 160, "Time": 65, "Message": 180,
         }
-        for col in MAP_COLS:
+        for col in VIS_COLS:
             self._map_tree.heading(col, text=col,
                                    command=lambda c=col: self._sort_mapping(c))
             self._map_tree.column(col, width=col_widths[col], minwidth=60, anchor="w")
+        # Hidden columns – zero width, no heading needed
+        for hcol in ("_fulllink", "_fullgroup"):
+            self._map_tree.column(hcol, width=0, minwidth=0, stretch=False)
 
         self._map_tree.pack(fill="both", expand=True)
 
@@ -461,6 +480,8 @@ class BroadcastTab:
             values=(
                 entry["account"], disp_group, entry["status"],
                 disp_link, entry["timestamp"], entry["msg_preview"],
+                # Hidden columns store full values for O(1) copy
+                entry["link"], entry["group"],
             ),
             tags=(tag,),
         )
@@ -493,23 +514,18 @@ class BroadcastTab:
         for row in self._map_tree.get_children():
             self._map_tree.delete(row)
 
-    def _selected_entry_value(self, field_idx: int) -> str:
-        """Return the raw display value of a column from the selected mapping row."""
+    def _selected_row_values(self) -> tuple:
+        """Return all column values (including hidden) for the selected row."""
         sel = self._map_tree.selection()
         if not sel:
-            return ""
-        return self._map_tree.item(sel[0], "values")[field_idx]
+            return ()
+        return self._map_tree.item(sel[0], "values")
 
     def _copy_link(self):
-        link = self._selected_entry_value(3)
-        if link:
-            # Restore full link from _all_mapping if truncated
-            acct = self._selected_entry_value(0)
-            grp  = self._selected_entry_value(1).rstrip("…")
-            for e in self._all_mapping:
-                if e["account"] == acct and e["group"].startswith(grp):
-                    link = e["link"]
-                    break
+        vals = self._selected_row_values()
+        if vals:
+            # Hidden column index 6 = _fulllink
+            link = vals[6] if len(vals) > 6 else vals[3]
             self.frame.clipboard_clear()
             self.frame.clipboard_append(link)
             messagebox.showinfo("Copied", f"Group link copied:\n{link}")
@@ -517,21 +533,18 @@ class BroadcastTab:
             messagebox.showwarning("Copy Link", "Select a row first.")
 
     def _copy_group(self):
-        grp = self._selected_entry_value(1)
-        if grp:
-            acct = self._selected_entry_value(0)
-            for e in self._all_mapping:
-                if e["account"] == acct and e["group"].startswith(grp.rstrip("…")):
-                    grp = e["group"]
-                    break
+        vals = self._selected_row_values()
+        if vals:
+            # Hidden column index 7 = _fullgroup
+            grp = vals[7] if len(vals) > 7 else vals[1]
             self.frame.clipboard_clear()
             self.frame.clipboard_append(grp)
 
     def _copy_account(self):
-        acct = self._selected_entry_value(0)
-        if acct:
+        vals = self._selected_row_values()
+        if vals:
             self.frame.clipboard_clear()
-            self.frame.clipboard_append(acct)
+            self.frame.clipboard_append(vals[0])
 
     def _show_ctx_menu(self, event):
         try:
@@ -647,19 +660,7 @@ class BroadcastTab:
             for entry in stats.log:
                 idx = self._log_box.size()
                 self._log_box.insert("end", entry)
-                # Color-code
-                if "✅" in entry:
-                    self._log_box.itemconfig(idx, fg=GREEN)
-                elif "🚫" in entry or "banned" in entry.lower() or "peerflood" in entry.lower():
-                    self._log_box.itemconfig(idx, fg=PURPLE)
-                elif "❌" in entry:
-                    self._log_box.itemconfig(idx, fg=RED)
-                elif "⏳" in entry or "🔄" in entry or "▶" in entry:
-                    self._log_box.itemconfig(idx, fg=GOLD)
-                elif "⚠️" in entry:
-                    self._log_box.itemconfig(idx, fg=GOLD)
-                else:
-                    self._log_box.itemconfig(idx, fg=MUTED)
+                self._log_box.itemconfig(idx, fg=_log_fg_color(entry))
             if self._log_box.size():
                 self._log_box.see(0)
 
