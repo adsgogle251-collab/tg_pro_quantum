@@ -740,7 +740,7 @@ class BroadcastTab:
             group_list = []
             if assigned:
                 group_list.append(f"Assigned ({len(assigned)})")
-            group_list += ["All Accounts"] + list(groups.keys())
+            group_list += [t("All Accounts")] + list(groups.keys())
             self.group_combo['values'] = group_list
             if assigned and hasattr(self, 'group_var') and not self.group_var.get():
                 self.group_var.set(f"Assigned ({len(assigned)})")
@@ -763,7 +763,7 @@ class BroadcastTab:
             if grp.startswith("Assigned"):
                 accounts = account_manager.get_accounts_by_feature("broadcast")
                 cnt = len(accounts)
-            elif grp == "All Accounts":
+            elif grp in ("All Accounts", "Semua Akun"):
                 cnt = len(account_manager.get_all())
             elif grp == "📢 Akun Siaran":
                 cnt = len(account_manager.get_accounts_by_feature("broadcast"))
@@ -850,7 +850,7 @@ class BroadcastTab:
         grp = self.group_var.get()
         if grp.startswith("Assigned"):
             accs = [a['name'] for a in account_manager.get_accounts_by_feature("broadcast")]
-        elif grp == "All Accounts":
+        elif grp in ("All Accounts", "Semua Akun"):
             accs = [a['name'] for a in account_manager.get_all()]
         elif grp == "📢 Akun Siaran":
             accs = [a['name'] for a in account_manager.get_accounts_by_feature("broadcast")]
