@@ -241,11 +241,11 @@ class FinderTab:
         self.export_menu.add_command(label="🔗 Export as TXT (links)", command=self._export_txt_links)
         self.export_menu.add_command(label="📦 Export as JSON", command=self._export_json)
 
-        export_btn = tk.Button(filter_frame, text="📥 Export ▼",
-                               command=self._show_export_menu,
-                               bg=COLORS["info"], fg="white",
-                               font=FONTS["bold"], padx=10, pady=4)
-        export_btn.pack(side="left", padx=6)
+        self._export_btn = tk.Button(filter_frame, text="📥 Export ▼",
+                                     command=self._show_export_menu,
+                                     bg=COLORS["info"], fg="white",
+                                     font=FONTS["bold"], padx=10, pady=4)
+        self._export_btn.pack(side="left", padx=6)
 
         add_join_btn = tk.Button(filter_frame, text="➕ Add to Join",
                                  command=self._add_to_join_queue,
@@ -592,7 +592,6 @@ class FinderTab:
         try:
             FOUND_GROUPS_TXT.parent.mkdir(parents=True, exist_ok=True)
             with open(FOUND_GROUPS_TXT, "a", encoding="utf-8") as f:
-                now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 for g in groups:
                     f.write(f"{g['link']}\n")
             return len(groups)
@@ -748,10 +747,10 @@ class FinderTab:
     # Export
     # ─────────────────────────────────────────────────────────────────────
     def _show_export_menu(self):
-        btn = self.frame.winfo_children()  # approximate position
         try:
-            x = self.frame.winfo_rootx() + 700
-            y = self.frame.winfo_rooty() + 380
+            btn = self._export_btn
+            x = btn.winfo_rootx()
+            y = btn.winfo_rooty() + btn.winfo_height()
             self.export_menu.tk_popup(x, y)
         finally:
             self.export_menu.grab_release()

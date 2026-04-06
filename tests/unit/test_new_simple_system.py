@@ -203,7 +203,7 @@ class TestFinderAdvanced:
             tmp = f.name
         try:
             count = auto_append_found_groups_txt([{"group_link": ""}, {"group_link": "https://t.me/ok"}], tmp)
-            assert count == 2  # function counts all dicts passed, skips write for empty
+            assert count == 1  # only the non-empty link is written
             lines = [l.strip() for l in open(tmp).readlines() if l.strip()]
             assert "https://t.me/ok" in lines
             assert "" not in lines

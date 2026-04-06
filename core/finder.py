@@ -330,7 +330,7 @@ def export_found_groups_txt_full(file_path: str) -> tuple[bool, str]:
     if not groups:
         return False, "No groups found yet."
     try:
-        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+        date_str = datetime.now().strftime("%Y-%m-%d")
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"FINDER RESULTS - {date_str}\n")
             f.write(f"Found {len(groups)} groups\n\n")
@@ -392,7 +392,8 @@ def export_found_groups_json_file(file_path: str) -> tuple[bool, str]:
 
 
 def auto_append_found_groups_txt(groups: list[dict], txt_path: Path | str) -> int:
-    """Append a list of group links to a TXT file. Returns count appended."""
+    """Append a list of group links to a TXT file. Returns count of links actually written."""
+    written = 0
     try:
         txt_path = Path(txt_path)
         txt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -401,7 +402,8 @@ def auto_append_found_groups_txt(groups: list[dict], txt_path: Path | str) -> in
                 link = g.get("group_link", "")
                 if link:
                     f.write(link + "\n")
-        return len(groups)
+                    written += 1
+        return written
     except Exception:
         return 0
 
