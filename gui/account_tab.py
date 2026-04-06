@@ -30,6 +30,7 @@ STATUS_COLORS = {
 
 class AccountTab:
     title = "👤 Accounts"
+    _COL_PHONE = 2  # index of the Phone column in the Treeview (after ☑, Name)
 
     def __init__(self, parent, main_window=None):
         self.parent = parent
@@ -122,7 +123,7 @@ class AccountTab:
             item = self._tree.identify_row(event.y)
             if item:
                 vals = list(self._tree.item(item, "values"))
-                phone = vals[2]  # Phone is now index 2
+                phone = vals[self._COL_PHONE]
                 if phone in self._checked_phones:
                     self._checked_phones.discard(phone)
                     vals[0] = "☐"
@@ -134,7 +135,7 @@ class AccountTab:
     def _select_all(self):
         """Toggle: check all if any are unchecked, otherwise uncheck all."""
         all_items = self._tree.get_children()
-        all_phones = {self._tree.item(i, "values")[2] for i in all_items}
+        all_phones = {self._tree.item(i, "values")[self._COL_PHONE] for i in all_items}
         if all_phones == self._checked_phones:
             # Deselect all
             self._checked_phones.clear()
@@ -153,7 +154,7 @@ class AccountTab:
         if not sel:
             messagebox.showwarning("Select", "Select an account first.")
             return None
-        return self._tree.item(sel[0], "values")[2]  # Phone is now index 2
+        return self._tree.item(sel[0], "values")[self._COL_PHONE]
 
     # ─────────────────────────────────────────────────────────────────────────
     # OTP Add Account dialog
@@ -367,11 +368,8 @@ class OTPDialog(tk.Toplevel):
                         self._status_var.set(
                             f"❌ {msg}  ·  Click Retry to resend or enter a new code."
                         )
-                        # Make sure Retry is visible so user knows how to proceed
-                        try:
-                            self._retry_btn.pack(side="left", padx=(0, 8))
-                        except Exception:
-                            pass
+                        # Ensure Retry is visible so user knows how to proceed
+                        self._retry_btn.pack(side="left", padx=(0, 8))
                     return
                 self._status_var.set(f"✅ {msg}")
                 self.after(1200, self._finish)
