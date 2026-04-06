@@ -21,6 +21,12 @@ TEXT  = COLORS["text"]
 MUTED = COLORS["text_muted"]
 ORANGE = COLORS["warning"]
 
+# OTP dialog status colours
+OTP_COLOR_WAITING = "#FFC107"   # Yellow – waiting for OTP
+OTP_COLOR_SUCCESS = "#4CAF50"   # Green  – verified
+OTP_COLOR_ERROR   = "#F44336"   # Red    – error / invalid code
+OTP_COLOR_INFO    = "#00BCD4"   # Cyan   – normal / info
+
 STATUS_COLORS = {
     "active":  GREEN,
     "expired": ORANGE,
@@ -206,7 +212,17 @@ class AccountTab:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class OTPDialog(tk.Toplevel):
-    """Two-step dialog: enter phone → get OTP → verify."""
+    """
+    Multi-step dialog: enter phone → receive OTP → verify → (2FA) → done.
+
+    Step indicators and colour-coded status make the flow obvious:
+      • Yellow (#FFC107)  – waiting / sending
+      • Green  (#4CAF50)  – success
+      • Red    (#F44336)  – error / invalid
+      • Cyan   (#00BCD4)  – neutral / info
+    """
+
+    _PLACEHOLDER_COLOR = "#9099B7"   # muted text for placeholder hints
 
     def __init__(self, parent, on_success=None):
         super().__init__(parent)
@@ -215,92 +231,208 @@ class OTPDialog(tk.Toplevel):
         self.resizable(False, False)
         self.configure(bg=BG)
         self.grab_set()
-        self._step = "phone"  # or "otp" or "2fa"
+        self._step = "phone"   # "phone" | "otp" | "2fa"
         self._build()
         self.update_idletasks()
-        # Center — wider dialog for better readability
-        w, h = 550, 420
+        # Center with comfortable 600 px width
+        w, h = 600, 500
         x = self.winfo_screenwidth()  // 2 - w // 2
         y = self.winfo_screenheight() // 2 - h // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
 
+    # ── Layout ────────────────────────────────────────────────────────────────
     def _build(self):
         self._container = tk.Frame(self, bg=BG)
-        self._container.pack(fill="both", expand=True, padx=30, pady=24)
+        self._container.pack(fill="both", expand=True, padx=32, pady=28)
 
-        tk.Label(self._container, text="Add Telegram Account",
-                 font=FONTS["heading"], fg=CYAN, bg=BG).pack(pady=(0, 18))
+        # Title
+        tk.Label(
+            self._container,
+            text="➕  Add Telegram Account",
+            font=FONTS["heading"], fg=OTP_COLOR_INFO, bg=BG,
+        ).pack(pady=(0, 4))
 
-        # Phone
-        tk.Label(self._container, text="Phone number (with country code):",
-                 font=FONTS["normal"], fg=TEXT, bg=BG).pack(anchor="w")
+        # Step indicator bar
+        self._step_label = tk.Label(
+            self._container,
+            text="Step 1 of 3 – Enter phone number",
+            font=FONTS["small"], fg=MUTED, bg=BG,
+        )
+        self._step_label.pack(pady=(0, 16))
+
+        # ── Phone number ──────────────────────────────────────────────────────
+        tk.Label(
+            self._container,
+            text="📱  Phone number  (include country code)",
+            font=FONTS["normal"], fg=TEXT, bg=BG, anchor="w",
+        ).pack(fill="x")
+
         self._phone_var = tk.StringVar()
         self._phone_entry = tk.Entry(
             self._container, textvariable=self._phone_var,
-            bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["subheading"], width=36, relief="flat"
+            bg=CARD, fg=self._PLACEHOLDER_COLOR,
+            insertbackground=TEXT,
+            font=FONTS["subheading"], relief="flat",
         )
-        self._phone_entry.pack(fill="x", ipady=5, pady=(4, 14))
-        self._phone_entry.focus()
+        self._phone_entry.pack(fill="x", ipady=7, pady=(4, 2))
+        self._phone_entry.insert(0, "+6281234567")
+        self._phone_entry.bind("<FocusIn>",  self._phone_focus_in)
+        self._phone_entry.bind("<FocusOut>", self._phone_focus_out)
 
-        # Display name
-        tk.Label(self._container, text="Display name (optional):",
-                 font=FONTS["normal"], fg=TEXT, bg=BG).pack(anchor="w")
+        tk.Label(
+            self._container, text="Example: +6281234567890  or  +19175550100",
+            font=FONTS["small"], fg=MUTED, bg=BG, anchor="w",
+        ).pack(fill="x", pady=(0, 12))
+
+        # ── Display name (optional) ───────────────────────────────────────────
+        name_row = tk.Frame(self._container, bg=BG)
+        name_row.pack(fill="x")
+        tk.Label(
+            name_row,
+            text="🏷️  Display name",
+            font=FONTS["normal"], fg=TEXT, bg=BG,
+        ).pack(side="left")
+        tk.Label(
+            name_row,
+            text="  (optional – defaults to Telegram first name)",
+            font=FONTS["small"], fg=MUTED, bg=BG,
+        ).pack(side="left")
+
         self._name_var = tk.StringVar()
-        tk.Entry(
+        self._name_entry = tk.Entry(
             self._container, textvariable=self._name_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["subheading"], width=36, relief="flat"
-        ).pack(fill="x", ipady=5, pady=(4, 14))
+            font=FONTS["subheading"], relief="flat",
+        )
+        self._name_entry.pack(fill="x", ipady=7, pady=(4, 16))
 
-        # OTP frame (hidden initially)
+        # ── OTP section (hidden until OTP is sent) ────────────────────────────
         self._otp_frame = tk.Frame(self._container, bg=BG)
-        tk.Label(self._otp_frame, text="Enter OTP code sent to your phone:",
-                 font=FONTS["normal"], fg=TEXT, bg=BG).pack(anchor="w")
+
+        otp_title_row = tk.Frame(self._otp_frame, bg=BG)
+        otp_title_row.pack(fill="x")
+        tk.Label(
+            otp_title_row,
+            text="🔑  OTP Code",
+            font=FONTS["normal"], fg=TEXT, bg=BG,
+        ).pack(side="left")
+        self._otp_hint = tk.Label(
+            otp_title_row,
+            text="  Enter the 5–6 digit code sent to your phone",
+            font=FONTS["small"], fg=MUTED, bg=BG,
+        )
+        self._otp_hint.pack(side="left")
+
         self._otp_var = tk.StringVar()
         self._otp_entry = tk.Entry(
             self._otp_frame, textvariable=self._otp_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["subheading"], width=24, relief="flat"
+            font=("Consolas", 18, "bold"), relief="flat",
+            justify="center",
         )
-        self._otp_entry.pack(fill="x", ipady=5, pady=(4, 14))
+        self._otp_entry.pack(fill="x", ipady=10, pady=(4, 4))
 
-        # 2FA frame (hidden initially)
+        # OTP status badge (Waiting / Received / Error)
+        self._otp_status = tk.Label(
+            self._otp_frame,
+            text="⏳  Waiting for OTP code…",
+            font=FONTS["bold"], fg=OTP_COLOR_WAITING, bg=BG,
+        )
+        self._otp_status.pack(anchor="w", pady=(0, 12))
+
+        # ── 2FA section (hidden until 2FA required) ───────────────────────────
         self._twofa_frame = tk.Frame(self._container, bg=BG)
-        tk.Label(self._twofa_frame, text="2FA Password:",
-                 font=FONTS["normal"], fg=TEXT, bg=BG).pack(anchor="w")
+
+        tk.Label(
+            self._twofa_frame,
+            text="🔐  Two-Factor Authentication (2FA)",
+            font=FONTS["normal"], fg=TEXT, bg=BG, anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            self._twofa_frame,
+            text="Your account has 2FA enabled. Enter your Telegram password below.",
+            font=FONTS["small"], fg=MUTED, bg=BG, anchor="w",
+        ).pack(fill="x", pady=(2, 4))
+
         self._pass_var = tk.StringVar()
-        tk.Entry(
+        self._pass_entry = tk.Entry(
             self._twofa_frame, textvariable=self._pass_var,
             show="*",
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=FONTS["subheading"], width=36, relief="flat"
-        ).pack(fill="x", ipady=5, pady=(4, 14))
+            font=FONTS["subheading"], relief="flat",
+        )
+        self._pass_entry.pack(fill="x", ipady=7, pady=(0, 12))
 
-        # Status message
+        # ── Status message (colour changes per state) ─────────────────────────
         self._status_var = tk.StringVar(value="")
-        tk.Label(
+        self._status_lbl = tk.Label(
             self._container, textvariable=self._status_var,
-            font=FONTS["normal"], fg=GREEN, bg=BG, wraplength=490, justify="left"
-        ).pack(anchor="w", pady=(0, 10))
+            font=FONTS["normal"], fg=OTP_COLOR_INFO, bg=BG,
+            wraplength=530, justify="left", anchor="w",
+        )
+        self._status_lbl.pack(fill="x", pady=(0, 12))
 
-        # Button row — Action | Retry (hidden initially) | Cancel
+        # ── Button row: Action | Retry | Cancel ───────────────────────────────
         btn_row = tk.Frame(self._container, bg=BG)
         btn_row.pack(fill="x")
+
         self._action_btn = make_btn(
-            btn_row, "📤 Send OTP", command=self._on_action,
-            color=CYAN, fg="#000"
+            btn_row, "📤  Send OTP", command=self._on_action,
+            color=OTP_COLOR_INFO, fg="#000",
         )
         self._action_btn.pack(side="left", padx=(0, 8))
-        self._retry_btn = make_btn(
-            btn_row, "🔄 Retry", command=self._on_retry,
-            color=ORANGE, fg="#000"
-        )
-        self._retry_btn.pack(side="left", padx=(0, 8))
-        self._retry_btn.pack_forget()  # hidden until needed
-        make_btn(btn_row, "✖ Cancel", command=self.destroy,
-                 color=CARD).pack(side="left")
 
+        self._retry_btn = make_btn(
+            btn_row, "🔄  Retry", command=self._on_retry,
+            color=ORANGE, fg="#000",
+        )
+        # Retry is always created but only shown when needed
+        self._retry_btn.pack_forget()
+
+        make_btn(
+            btn_row, "✖  Cancel", command=self.destroy,
+            color=CARD, fg=TEXT,
+        ).pack(side="left")
+
+    # ── Placeholder helpers ───────────────────────────────────────────────────
+    def _phone_focus_in(self, _event=None):
+        if self._phone_entry.cget("fg") == self._PLACEHOLDER_COLOR:
+            self._phone_entry.delete(0, "end")
+            self._phone_entry.config(fg=TEXT)
+
+    def _phone_focus_out(self, _event=None):
+        if not self._phone_var.get().strip():
+            self._phone_entry.config(fg=self._PLACEHOLDER_COLOR)
+            self._phone_entry.insert(0, "+6281234567")
+
+    # ── Status helper ─────────────────────────────────────────────────────────
+    def _set_status(self, text: str, color: str = OTP_COLOR_INFO):
+        self._status_var.set(text)
+        self._status_lbl.config(fg=color)
+
+    def _set_otp_status(self, text: str, color: str = OTP_COLOR_WAITING):
+        self._otp_status.config(text=text, fg=color)
+
+    # ── Step transitions ──────────────────────────────────────────────────────
+    def _go_to_otp_step(self):
+        self._step = "otp"
+        self._step_label.config(text="Step 2 of 3 – Enter OTP code")
+        self._otp_frame.pack(fill="x", pady=(0, 4))
+        self._set_otp_status("✅  OTP sent!  Check your phone for the code.", OTP_COLOR_SUCCESS)
+        self._action_btn.config(text="✅  Verify OTP", bg=OTP_COLOR_SUCCESS, fg="#000")
+        self._retry_btn.pack(side="left", padx=(0, 8))
+        self._otp_entry.focus()
+        self._set_status("Enter the code you received, then click Verify OTP.", OTP_COLOR_INFO)
+
+    def _go_to_2fa_step(self):
+        self._step = "2fa"
+        self._step_label.config(text="Step 3 of 3 – Enter 2FA password")
+        self._twofa_frame.pack(fill="x", pady=(0, 4))
+        self._action_btn.config(text="🔓  Verify 2FA", bg=OTP_COLOR_INFO, fg="#000", state="normal")
+        self._pass_entry.focus()
+        self._set_status("🔐  2FA password required.  Enter your Telegram password below.", OTP_COLOR_WAITING)
+
+    # ── Action dispatch ───────────────────────────────────────────────────────
     def _on_action(self):
         if self._step == "phone":
             self._do_send_otp()
@@ -309,121 +441,138 @@ class OTPDialog(tk.Toplevel):
         elif self._step == "2fa":
             self._do_verify_2fa()
 
+    # ── Send OTP ──────────────────────────────────────────────────────────────
     def _do_send_otp(self):
         phone = self._phone_var.get().strip()
-        if not phone:
-            messagebox.showwarning("Missing", "Enter phone number.", parent=self)
+        # Treat placeholder value as empty
+        if not phone or phone == "+6281234567":
+            messagebox.showwarning("Missing", "Please enter your phone number.", parent=self)
+            self._phone_entry.focus()
             return
-        self._status_var.set("Sending OTP...")
-        self._action_btn.config(state="disabled")
+        self._set_status("⏳  Sending OTP…  Please wait.", OTP_COLOR_WAITING)
+        self._action_btn.config(text="Sending…", state="disabled")
 
         def task():
             ok, msg = run_async(send_otp(phone))
+
             def after():
                 self._action_btn.config(state="normal")
                 if not ok:
-                    self._status_var.set(f"❌ {msg}")
+                    self._set_status(f"❌  {msg}", OTP_COLOR_ERROR)
+                    self._action_btn.config(text="📤  Send OTP")
                     return
                 if msg == "already_authorized":
-                    # Already logged in — save directly
                     name = self._name_var.get().strip() or phone
                     from core.account import _upsert_account, _session_path
                     sf = _session_path(phone) + ".session"
                     _upsert_account(name, phone, sf, "active")
-                    self._status_var.set(f"✅ Account {name} added (already authorized).")
-                    self.after(1200, self._finish)
+                    self._set_status(f"✅  Account '{name}' added (already authorised).", OTP_COLOR_SUCCESS)
+                    self.after(1400, self._finish)
                     return
-                # Show OTP field and Retry button
-                self._step = "otp"
-                self._otp_frame.pack(fill="x", pady=(0, 10))
-                self._otp_entry.focus()
-                self._action_btn.config(text="✅ Verify OTP")
-                self._retry_btn.pack(side="left", padx=(0, 8))
-                self._status_var.set("✅ OTP sent! Enter the code from your phone.")
+                self._go_to_otp_step()
+
             self.after(0, after)
 
         threading.Thread(target=task, daemon=True).start()
 
+    # ── Verify OTP ────────────────────────────────────────────────────────────
     def _do_verify_otp(self):
         phone = self._phone_var.get().strip()
         code  = self._otp_var.get().strip()
         name  = self._name_var.get().strip()
         if not code:
-            messagebox.showwarning("Missing", "Enter OTP code.", parent=self)
+            messagebox.showwarning("Missing", "Please enter the OTP code.", parent=self)
+            self._otp_entry.focus()
             return
-        self._status_var.set("Verifying OTP...")
+        self._set_otp_status("⏳  Verifying OTP code…", OTP_COLOR_WAITING)
+        self._set_status("Verifying…", OTP_COLOR_WAITING)
         self._action_btn.config(state="disabled")
 
         def task():
             ok, msg = run_async(verify_otp(phone, code, name))
+
             def after():
                 self._action_btn.config(state="normal")
                 if not ok:
                     if msg == "2FA_required":
-                        self._step = "2fa"
-                        self._twofa_frame.pack(fill="x", pady=(0, 10))
-                        self._action_btn.config(text="🔓 Verify 2FA")
-                        self._status_var.set("🔐 2FA password required. Enter it below.")
+                        self._set_otp_status("✅  OTP verified.", OTP_COLOR_SUCCESS)
+                        self._go_to_2fa_step()
                     else:
-                        self._status_var.set(
-                            f"❌ {msg}  ·  Click Retry to resend or enter a new code."
+                        self._set_otp_status(
+                            "❌  Invalid OTP code.  Try again or request a new code.",
+                            OTP_COLOR_ERROR,
                         )
-                        # Ensure Retry is visible so user knows how to proceed
-                        self._retry_btn.pack(side="left", padx=(0, 8))
+                        self._set_status(
+                            f"❌  {msg}  —  Clear the field and try a different code, or click Retry to resend.",
+                            OTP_COLOR_ERROR,
+                        )
+                        self._otp_var.set("")
+                        self._otp_entry.focus()
                     return
-                self._status_var.set(f"✅ {msg}")
-                self.after(1200, self._finish)
+                self._set_otp_status("✅  OTP verified successfully!", OTP_COLOR_SUCCESS)
+                self._set_status(f"✅  {msg}", OTP_COLOR_SUCCESS)
+                self.after(1400, self._finish)
+
             self.after(0, after)
 
         threading.Thread(target=task, daemon=True).start()
 
+    # ── Verify 2FA ────────────────────────────────────────────────────────────
     def _do_verify_2fa(self):
         phone    = self._phone_var.get().strip()
         code     = self._otp_var.get().strip()
         name     = self._name_var.get().strip()
         password = self._pass_var.get().strip()
         if not password:
-            messagebox.showwarning("Missing", "Enter 2FA password.", parent=self)
+            messagebox.showwarning("Missing", "Please enter your 2FA password.", parent=self)
+            self._pass_entry.focus()
             return
-        self._status_var.set("Verifying 2FA...")
+        self._set_status("⏳  Verifying 2FA password…", OTP_COLOR_WAITING)
         self._action_btn.config(state="disabled")
 
         def task():
             ok, msg = run_async(verify_otp(phone, code, name, password))
+
             def after():
                 self._action_btn.config(state="normal")
                 if not ok:
-                    self._status_var.set(
-                        f"❌ {msg}  ·  Click Retry to go back to OTP entry."
+                    self._set_status(
+                        f"❌  {msg}  —  Check your password and try again, or click Retry to go back.",
+                        OTP_COLOR_ERROR,
                     )
                     return
-                self._status_var.set(f"✅ {msg}")
-                self.after(1200, self._finish)
+                self._set_status(f"✅  {msg}", OTP_COLOR_SUCCESS)
+                self.after(1400, self._finish)
+
             self.after(0, after)
 
         threading.Thread(target=task, daemon=True).start()
 
+    # ── Retry ─────────────────────────────────────────────────────────────────
     def _on_retry(self):
-        """Retry: if in OTP step resend OTP; if in 2FA step go back to OTP."""
+        """Retry: in OTP step → resend OTP from phone; in 2FA step → back to OTP."""
         if self._step == "2fa":
-            # Go back to OTP entry
             self._twofa_frame.pack_forget()
             self._pass_var.set("")
-            self._otp_var.set("")
             self._step = "otp"
-            self._action_btn.config(text="✅ Verify OTP", state="normal")
+            self._step_label.config(text="Step 2 of 3 – Enter OTP code")
+            self._action_btn.config(text="✅  Verify OTP", bg=OTP_COLOR_SUCCESS, state="normal")
+            self._otp_var.set("")
             self._otp_entry.focus()
-            self._status_var.set("Enter a new OTP code or click 'Send OTP' again.")
+            self._set_otp_status("⏳  Enter a new OTP code.", OTP_COLOR_WAITING)
+            self._set_status("Enter a new OTP code or click Retry again to resend.", OTP_COLOR_INFO)
         else:
-            # Reset to phone step so user can resend
+            # Back to phone step to allow re-send
             self._otp_frame.pack_forget()
             self._otp_var.set("")
             self._step = "phone"
-            self._action_btn.config(text="📤 Send OTP", state="normal")
+            self._step_label.config(text="Step 1 of 3 – Enter phone number")
+            self._action_btn.config(text="📤  Send OTP", bg=OTP_COLOR_INFO, state="normal")
             self._retry_btn.pack_forget()
             self._phone_entry.focus()
-            self._status_var.set("Enter your phone number and click 'Send OTP' to resend.")
+            self._set_status("Enter your phone number and click Send OTP to request a new code.", OTP_COLOR_INFO)
 
+    # ── Finish ────────────────────────────────────────────────────────────────
     def _finish(self):
         if self.on_success:
             self.on_success()
