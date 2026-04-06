@@ -98,6 +98,10 @@ class AccountTab:
                 tags=(status,))
         self._status_var.set(f"Loaded {len(accounts)} accounts.")
 
+    def refresh_list(self):
+        """Public method to reload the account list from outside this tab."""
+        self._refresh()
+
     def _selected_phone(self) -> str | None:
         sel = self._tree.selection()
         if not sel:

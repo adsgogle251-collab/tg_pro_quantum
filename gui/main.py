@@ -82,6 +82,13 @@ class SimpleMainWindow:
     def set_status(self, msg: str):
         self._status_var.set(msg)
 
+    def refresh_account_tab(self):
+        """Refresh the Account tab list – called after a successful import."""
+        for tab in self._tabs:
+            if hasattr(tab, "refresh_list"):
+                tab.refresh_list()
+                return
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 def launch():
