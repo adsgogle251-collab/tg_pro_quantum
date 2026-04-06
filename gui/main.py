@@ -89,6 +89,14 @@ class SimpleMainWindow:
                 tab.refresh_list()
                 return
 
+    def refresh_broadcast_tab(self):
+        """Refresh broadcast tab accounts and groups (e.g. after account changes)."""
+        for tab in self._tabs:
+            if hasattr(tab, "_reload_accounts"):
+                tab._reload_accounts()
+            if hasattr(tab, "_reload_groups"):
+                tab._reload_groups()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 def launch():
