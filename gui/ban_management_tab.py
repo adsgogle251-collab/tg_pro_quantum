@@ -6,7 +6,7 @@ from tkinter import ttk, messagebox
 
 from gui.styles import COLORS, FONTS, make_btn
 from core.ban_detector import get_ban_summary, SUGGESTIONS
-from core.config import list_ban_logs
+from core.config import list_ban_logs, clear_ban_logs
 
 BG    = COLORS["bg_dark"]
 PANEL = COLORS["bg_medium"]
@@ -116,10 +116,6 @@ class BanManagementTab:
     def _clear_logs(self):
         if not messagebox.askyesno("Clear Logs", "Delete all ban log entries? This cannot be undone."):
             return
-        import sqlite3
-        from core.config import BROADCASTS_DB
-        with sqlite3.connect(str(BROADCASTS_DB)) as conn:
-            conn.execute("DELETE FROM ban_logs")
-            conn.commit()
+        clear_ban_logs()
         self._refresh()
         messagebox.showinfo("Cleared", "All ban logs cleared.")

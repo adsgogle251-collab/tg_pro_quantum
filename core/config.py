@@ -275,6 +275,13 @@ def list_ban_logs() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def clear_ban_logs():
+    """Delete all ban log entries."""
+    with _get_conn(BROADCASTS_DB) as conn:
+        conn.execute("DELETE FROM ban_logs")
+        conn.commit()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Broadcast queue helpers
 # ─────────────────────────────────────────────────────────────────────────────

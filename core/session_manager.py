@@ -14,7 +14,7 @@ from telethon.errors import FloodWaitError
 from core.config import SESSIONS_DIR, get_api_id, get_api_hash
 from core.account import _upsert_account, get_account, _session_path, list_accounts
 
-PHONE_RE = re.compile(r"^\+?\d{7,15}$")
+PHONE_RE = re.compile(r"^\+?\d{8,15}$")
 
 
 def _extract_phone_from_session(session_path: Path) -> Optional[str]:
