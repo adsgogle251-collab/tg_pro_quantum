@@ -1,23 +1,26 @@
 """
-gui/main.py - Simple main window with 5 tabs: Account, Finder, Broadcast, Analytics, Settings
+gui/main.py - Main window with 8 tabs: Import, Account, Finder, Join, Broadcast, Ban Management, Analytics, Settings
 """
 import tkinter as tk
 from tkinter import ttk
 import sys
 
 from gui.styles import COLORS, FONTS, setup_theme
-from gui.account_tab   import AccountTab
-from gui.finder_tab    import FinderTab
-from gui.broadcast_tab import BroadcastTab
-from gui.analytics_tab import AnalyticsTab
-from gui.settings_tab  import SettingsTab
+from gui.import_tab        import ImportTab
+from gui.account_tab       import AccountTab
+from gui.finder_tab        import FinderTab
+from gui.join_tab          import JoinTab
+from gui.broadcast_tab     import BroadcastTab
+from gui.ban_management_tab import BanManagementTab
+from gui.analytics_tab     import AnalyticsTab
+from gui.settings_tab      import SettingsTab
 
 BG   = COLORS["bg_dark"]
 CYAN = COLORS["primary"]
 
 
 class SimpleMainWindow:
-    """Clean, simple main window with tab-based navigation."""
+    """Main window with tab-based navigation."""
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -31,7 +34,6 @@ class SimpleMainWindow:
 
     # ─────────────────────────────────────────────────────────────────────────
     def _build(self):
-        # Header bar
         header = tk.Frame(self.root, bg=COLORS["bg_medium"], height=48)
         header.pack(fill="x")
         header.pack_propagate(False)
@@ -45,14 +47,16 @@ class SimpleMainWindow:
             padx=16,
         ).pack(side="left", fill="y")
 
-        # Notebook (tabs)
         self._notebook = ttk.Notebook(self.root)
         self._notebook.pack(fill="both", expand=True, padx=0, pady=0)
 
         tab_classes = [
+            ImportTab,
             AccountTab,
             FinderTab,
+            JoinTab,
             BroadcastTab,
+            BanManagementTab,
             AnalyticsTab,
             SettingsTab,
         ]
@@ -63,7 +67,6 @@ class SimpleMainWindow:
             self._notebook.add(instance.frame, text=f"  {instance.title}  ")
             self._tabs.append(instance)
 
-        # Status bar
         self._status_var = tk.StringVar(value="Ready.")
         status_bar = tk.Frame(self.root, bg=COLORS["bg_medium"], height=24)
         status_bar.pack(fill="x", side="bottom")
@@ -82,7 +85,7 @@ class SimpleMainWindow:
 
 # ─────────────────────────────────────────────────────────────────────────────
 def launch():
-    """Entry point for the new simple GUI."""
+    """Entry point for the GUI."""
     root = tk.Tk()
     app = SimpleMainWindow(root)
     root.mainloop()
@@ -90,3 +93,4 @@ def launch():
 
 if __name__ == "__main__":
     launch()
+

@@ -1,5 +1,5 @@
 """
-core/finder.py - Scrape members from Telegram groups
+core/finder.py - Scrape members from Telegram groups + keyword-based group search
 """
 import asyncio
 import csv
@@ -7,14 +7,19 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from telethon import TelegramClient
 from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.contacts import SearchRequest
 from telethon.tl.types import ChannelParticipantsSearch
 
-from core.config import GROUPS_DB, SESSIONS_DIR, get_api_id, get_api_hash
+from core.config import (
+    GROUPS_DB, SESSIONS_DIR, get_api_id, get_api_hash,
+    save_group_search_result, list_group_search_results,
+)
 from core.account import _session_path
+from core.group_detector import is_group as _is_group, get_entity_type
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -189,3 +194,131 @@ def export_csv(group_link: str, file_path: str) -> tuple[bool, str]:
         return True, f"Exported {len(members)} members to {file_path}"
     except Exception as e:
         return False, str(e)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Keyword-based group search
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def search_groups_by_keyword(
+    phone: str,
+    keyword: str,
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+    stop_flag: Optional[list] = None,
+) -> tuple[int, list[dict]]:
+    """
+    Search for Telegram groups using a keyword via the Telegram contacts search API.
+    Returns (count_found, results_list).
+    Each result: {group_link, title, member_count, is_group, username}
+    """
+    api_id = get_api_id()
+    api_hash = get_api_hash()
+    if not api_id or not api_hash:
+        return 0, []
+
+    if stop_flag is None:
+        stop_flag = [False]
+
+    session = _session_path(phone)
+    client = TelegramClient(session, api_id, api_hash)
+    results: list[dict] = []
+
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            await client.disconnect()
+            return 0, []
+
+        if on_progress:
+            on_progress(0, 0, f"Searching: {keyword}")
+
+        try:
+            search_result = await client(SearchRequest(q=keyword, limit=100))
+        except Exception:
+            await client.disconnect()
+            return 0, []
+
+        chats = getattr(search_result, "chats", [])
+        for chat in chats:
+            if stop_flag[0]:
+                break
+            entity_type = get_entity_type(chat)
+            if entity_type not in ("group", "channel"):
+                continue
+
+            username = getattr(chat, "username", None) or ""
+            group_link = f"https://t.me/{username}" if username else f"https://t.me/c/{chat.id}"
+            title = getattr(chat, "title", username) or username
+            member_count = getattr(chat, "participants_count", 0) or 0
+            group_flag = _is_group(chat)
+
+            entry = {
+                "group_link": group_link,
+                "title": title,
+                "member_count": member_count,
+                "is_group": group_flag,
+                "username": username,
+                "keyword": keyword,
+            }
+            results.append(entry)
+            save_group_search_result(keyword, group_link, title, member_count, group_flag)
+
+        await client.disconnect()
+
+        if on_progress:
+            on_progress(len(results), len(results), f"Found {len(results)} for '{keyword}'")
+
+        return len(results), results
+
+    except Exception:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+        return 0, []
+
+
+async def search_groups_batch(
+    phone: str,
+    keywords: list[str],
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+    stop_flag: Optional[list] = None,
+) -> tuple[int, int]:
+    """Search multiple keywords. Returns (total_found, keywords_searched)."""
+    if stop_flag is None:
+        stop_flag = [False]
+
+    total_found = 0
+    searched = 0
+
+    for i, kw in enumerate(keywords):
+        if stop_flag[0]:
+            break
+        if on_progress:
+            on_progress(i + 1, len(keywords), f"Keyword {i+1}/{len(keywords)}: {kw}")
+        count, _ = await search_groups_by_keyword(phone, kw, stop_flag=stop_flag)
+        total_found += count
+        searched += 1
+        await asyncio.sleep(1.5)  # avoid flood
+
+    return total_found, searched
+
+
+def list_found_groups(only_unjoined: bool = False) -> list[dict]:
+    """List groups found by search. Optionally filter unjoined only."""
+    return list_group_search_results(only_unjoined=only_unjoined)
+
+
+def export_found_groups_txt(file_path: str) -> tuple[bool, str]:
+    """Export found groups to TXT file (one link per line)."""
+    groups = list_group_search_results()
+    if not groups:
+        return False, "No groups found yet."
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            for g in groups:
+                f.write(g.get("group_link", "") + "\n")
+        return True, f"Exported {len(groups)} groups to {file_path}"
+    except Exception as e:
+        return False, str(e)
+

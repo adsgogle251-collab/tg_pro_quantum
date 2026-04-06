@@ -6,6 +6,7 @@ import asyncio
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from telethon import TelegramClient
 from telethon.errors import (
@@ -237,3 +238,37 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk OTP helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_pending_otp_accounts() -> list[dict]:
+    """Return accounts with status='pending_otp'."""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM accounts WHERE status = 'pending_otp' ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+async def send_otp_batch(
+    phones: list[str],
+    on_progress: Callable | None = None,
+) -> list[tuple[str, bool, str]]:
+    """
+    Send OTP to multiple phones sequentially.
+    Returns list of (phone, success, message).
+    """
+    results: list[tuple[str, bool, str]] = []
+    for i, phone in enumerate(phones):
+        if on_progress:
+            on_progress(i + 1, len(phones), f"Sending OTP to {phone}...")
+        ok, msg = await send_otp(phone)
+        results.append((phone, ok, msg))
+        if ok:
+            update_account_status(phone, "otp_sent")
+        await asyncio.sleep(1.5)  # avoid flood
+    return results
+
