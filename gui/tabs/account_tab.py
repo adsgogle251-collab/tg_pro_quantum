@@ -1003,6 +1003,7 @@ class AccountTab:
     def _sync_feature_tabs(self):
         """Notify main_window to sync all feature tabs."""
         try:
+            state_manager.emit_state_change("account_assigned", {"feature": "updated"})
             mw = getattr(self, 'main_window', None)
             if mw is not None and hasattr(mw, "sync_feature_tabs"):
                 mw.sync_feature_tabs()

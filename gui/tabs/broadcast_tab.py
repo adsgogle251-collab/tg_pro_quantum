@@ -6,7 +6,7 @@ import asyncio
 import time
 from datetime import datetime
 from core import log, load_message, save_message, load_groups, statistics, campaign_manager, account_manager
-from core.engine import broadcast_engine
+from core.broadcast_manager import broadcast_manager
 from core import broadcast_history
 from core.state_manager import state_manager
 from core.localization import t
@@ -316,14 +316,22 @@ class BroadcastTab:
 
     def _on_detail_pause(self, campaign_id):
         log(f"Pause campaign {campaign_id} from detail view", "info")
+        broadcast_manager.pause()
         self._load_campaigns()
 
     def _on_detail_resume(self, campaign_id):
         log(f"Resume campaign {campaign_id} from detail view", "info")
+        broadcast_manager.resume()
         self._load_campaigns()
 
     def _on_detail_stop(self, campaign_id):
         log(f"Stop campaign {campaign_id} from detail view", "warning")
+        broadcast_manager.stop()
+        self.running = False
+        self.paused = False
+        self.start_btn.config(state="normal")
+        self.pause_btn.config(state="disabled", text="⏸️ PAUSE")
+        self.stop_btn.config(state="disabled")
         self._load_campaigns()
 
     # ── Create Campaign Modal (Phase 3A) ──────────────────────────────────────
@@ -801,6 +809,7 @@ class BroadcastTab:
         prog = kwargs.get('progress_percent', 0)
         done = kwargs.get('completed', False)
         err = kwargs.get('error')
+        active_accounts = kwargs.get('active_accounts', [])
         
         self.sent_lbl.config(text=f"✅ Sent: {sent}")
         self.fail_lbl.config(text=f"❌ Failed: {failed}")
@@ -814,6 +823,8 @@ class BroadcastTab:
         # Active account display
         if cur_acc:
             self.active_acc_lbl.config(text=f"📱 Active: {cur_acc[:20]}")
+        elif active_accounts and len(active_accounts) > 0:
+            self.active_acc_lbl.config(text=f"📱 Active: {active_accounts[0].get('name', '—')[:20]}")
         
         if total > 0:
             self.progress['value'] = min(100, prog)
@@ -846,14 +857,7 @@ class BroadcastTab:
         else:
             accs = account_manager.get_group_accounts(grp)
         
-        if not accs:
-            messagebox.showwarning("Warning", "No accounts!")
-            return
-        
         grps = load_groups()
-        if not grps:
-            messagebox.showwarning("Warning", "No target groups!\n\nUse Finder tab first.")
-            return
         
         save_message(msg)
         self.running = True
@@ -872,32 +876,61 @@ class BroadcastTab:
         for item in self.progress_tree.get_children():
             self.progress_tree.delete(item)
         
-        log(f"📢 BROADCAST STARTED: {len(accs)} accounts, {len(grps)} groups", "success")
-        
         def cb(**kw):
             self.frame.after(0, lambda: self._on_broadcast_progress(**kw))
+            # Keep detail page campaign_data in sync
+            if self._detail_page:
+                self._detail_page.campaign_data["sent_count"] = kw.get("sent", 0)
+                self._detail_page.campaign_data["failed_count"] = kw.get("failed", 0)
+
+        def act_cb(entry):
+            if self._detail_page:
+                self.frame.after(0, lambda e=entry: self._detail_page.append_activity(e))
         
-        def run():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(
-                    broadcast_engine.run(
-                        campaign_id=self.current_campaign_id,
-                        accounts=accs, message=msg, groups=grps,
-                        delay_min=int(self.delay_min.get()),
-                        delay_max=int(self.delay_max.get()),
-                        round_robin=self.round_robin_var.get(),
-                        progress_callback=cb
-                    )
-                )
-            except Exception as e:
-                log(f"Error: {e}", "error")
-                self.frame.after(0, lambda: self._on_broadcast_progress(error=str(e)))
-            finally:
-                loop.close()
+        # Delegate to broadcast_manager (handles accounts + groups resolution)
+        started = broadcast_manager.start(
+            message=msg,
+            accounts=accs or None,
+            groups=grps or None,
+            delay_min=int(self.delay_min.get()),
+            delay_max=int(self.delay_max.get()),
+            round_robin=self.round_robin_var.get(),
+            campaign_id=self.current_campaign_id,
+            progress_callback=cb,
+            activity_callback=act_cb,
+        )
         
-        threading.Thread(target=run, daemon=True).start()
+        if not started:
+            self.running = False
+            self.start_btn.config(state="normal")
+            self.pause_btn.config(state="disabled")
+            self.stop_btn.config(state="disabled")
+            messagebox.showerror(
+                "Cannot Start Broadcast",
+                "Broadcast could not start.\n\n"
+                "Please check:\n"
+                "• At least one account assigned to 'broadcast' feature\n"
+                "• Target groups saved (use Finder tab → Save to valid.txt)\n"
+                "• API ID / API Hash configured in Settings tab"
+            )
+            return
+        
+        # Update detail page with REAL accounts + group count
+        if self._detail_page:
+            self._detail_page.update_campaign_data({
+                "total_targets": len(broadcast_manager.target_groups),
+                "_start_ts": time.time(),
+                "sent_count": 0,
+                "failed_count": 0,
+            })
+            self._detail_page._account_rows = broadcast_manager.get_account_rows()
+            self._detail_page._refresh_accounts()
+        
+        log(
+            f"📢 BROADCAST STARTED: {len(broadcast_manager.active_accounts)} accounts, "
+            f"{len(broadcast_manager.target_groups)} groups",
+            "success",
+        )
         # Start auto-refresh monitor (updates live stats every second)
         self._auto_refresh_monitor()
 
@@ -914,14 +947,17 @@ class BroadcastTab:
     def _pause_broadcast(self):
         if self.running and not self.paused:
             self.paused = True
+            broadcast_manager.pause()
             self.pause_btn.config(text="▶ RESUME", command=self._resume_broadcast)
     
     def _resume_broadcast(self):
         if self.running and self.paused:
             self.paused = False
+            broadcast_manager.resume()
             self.pause_btn.config(text="⏸️ PAUSE", command=self._pause_broadcast)
     
     def _stop_broadcast(self):
+        broadcast_manager.stop()
         self.running = False
         self.paused = False
         self.start_btn.config(state="normal")
