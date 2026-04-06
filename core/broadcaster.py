@@ -21,8 +21,9 @@ from telethon.errors import (
 from core.config import get_api_id, get_api_hash, log_ban
 from core.account import list_accounts, _session_path, update_account_status
 
-SEND_DELAY = 5.0       # seconds between individual sends
-ROUND_DELAY = 120.0    # seconds to wait after a full round
+SEND_DELAY = 5.0            # seconds between individual sends
+ROUND_DELAY = 120.0         # seconds to wait after a full round
+MAX_MAPPING_ENTRIES = 500   # maximum per-account-group mapping entries to retain
 
 
 class BroadcastStats:
@@ -63,6 +64,9 @@ class BroadcastStats:
             "link": link,
             "timestamp": ts,
             "msg_preview": msg_preview[:50] if msg_preview else "",
+            # Pre-computed lowercase values for efficient GUI search filtering
+            "_account_lc": account.lower(),
+            "_group_lc": group.lower(),
         }
         key = (account, group)
         if key in self._mapping_dict:
@@ -70,7 +74,7 @@ class BroadcastStats:
         else:
             self._mapping_dict[key] = entry   # O(1) insert
             self._mapping_order.insert(0, key)
-            if len(self._mapping_order) > 500:
+            if len(self._mapping_order) > MAX_MAPPING_ENTRIES:
                 old_key = self._mapping_order.pop()
                 self._mapping_dict.pop(old_key, None)
 
@@ -307,7 +311,7 @@ class AdvancedBroadcaster:
 
                 except SlowModeWaitError as e:
                     self.stats.failed += 1
-                    self.stats.add_log(f"🐌 {group_link}: slow mode {e.seconds}s")
+                    self.stats.add_log(f"🐌 {display_name} → {group_link}: slow mode {e.seconds}s")
                     self.stats.failed_groups.append(group_link)
                     self.stats.add_mapping(display_name, group_link, "🐌 SlowMode",
                                            group_link, msg_preview)
@@ -358,4 +362,5 @@ __all__ = [
     "advanced_broadcaster",
     "SEND_DELAY",
     "ROUND_DELAY",
+    "MAX_MAPPING_ENTRIES",
 ]

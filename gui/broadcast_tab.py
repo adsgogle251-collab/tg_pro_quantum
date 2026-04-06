@@ -465,8 +465,12 @@ class BroadcastTab:
             self._map_tree.delete(row)
 
         for entry in self._all_mapping:
-            if search and search not in entry["account"].lower() and search not in entry["group"].lower():
-                continue
+            if search:
+                # Use pre-computed lowercase fields when available (avoids repeated .lower())
+                acct_lc = entry.get("_account_lc") or entry["account"].lower()
+                grp_lc  = entry.get("_group_lc")   or entry["group"].lower()
+                if search not in acct_lc and search not in grp_lc:
+                    continue
             if status_filter != "All" and status_filter not in entry["status"]:
                 continue
             self._insert_mapping_row(entry)
@@ -552,7 +556,7 @@ class BroadcastTab:
             if row:
                 self._map_tree.selection_set(row)
                 self._ctx_menu.post(event.x_root, event.y_root)
-        finally:
+        except tk.TclError:
             pass
 
     # ─────────────────────────────────────────────────────────────────────────
