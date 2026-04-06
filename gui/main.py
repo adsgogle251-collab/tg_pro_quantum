@@ -84,9 +84,10 @@ class SimpleMainWindow:
 
     def refresh_account_tab(self):
         """Refresh the Account tab list – called after a successful import."""
-        account_tab = self._tabs[1]
-        if hasattr(account_tab, "refresh_list"):
-            account_tab.refresh_list()
+        for tab in self._tabs:
+            if hasattr(tab, "refresh_list"):
+                tab.refresh_list()
+                return
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -195,7 +195,8 @@ class ImportTab:
                 self._folder_log.insert("end", m)
             summary = f"Done: {ok} imported, {fail} failed."
             if ok > 0 and self.main_window:
-                summary = f"Imported {ok} accounts! Tab refreshed."
+                suffix = f" ({fail} failed)" if fail > 0 else ""
+                summary = f"Imported {ok} accounts{suffix}! Tab refreshed."
                 self.frame.after(0, self.main_window.refresh_account_tab)
             self._folder_status.config(
                 text=summary,
