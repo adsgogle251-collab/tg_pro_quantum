@@ -111,6 +111,9 @@ class ImportTab:
                 on_progress=lambda m: self._single_status.config(text=m, fg=MUTED),
             )
             color = GREEN if ok else RED
+            if ok and self.main_window:
+                msg = f"{msg}  ✅ Account tab refreshed."
+                self.frame.after(0, self.main_window.refresh_account_tab)
             self._single_status.config(text=msg, fg=color)
 
         threading.Thread(target=_run, daemon=True).start()
@@ -190,8 +193,12 @@ class ImportTab:
             ok, fail, messages = import_folder_sessions(path, on_progress=_progress)
             for m in messages:
                 self._folder_log.insert("end", m)
+            summary = f"Done: {ok} imported, {fail} failed."
+            if ok > 0 and self.main_window:
+                summary = f"Imported {ok} accounts! Tab refreshed."
+                self.frame.after(0, self.main_window.refresh_account_tab)
             self._folder_status.config(
-                text=f"Done: {ok} imported, {fail} failed.",
+                text=summary,
                 fg=GREEN if ok > 0 else RED,
             )
 
@@ -254,8 +261,12 @@ class ImportTab:
 
         def _run():
             count, phones = import_phones_txt(path)
+            msg = f"Added {count} new phone(s) (status: pending_otp)."
+            if count > 0 and self.main_window:
+                msg = f"Imported {count} accounts! Tab refreshed."
+                self.frame.after(0, self.main_window.refresh_account_tab)
             self._txt_status.config(
-                text=f"Added {count} new phone(s) (status: pending_otp).",
+                text=msg,
                 fg=GREEN if count > 0 else MUTED,
             )
 
@@ -309,8 +320,12 @@ class ImportTab:
             messagebox.showwarning("Add", "Please enter at least one phone number.")
             return
         count, phones = add_phones_manual(text)
+        msg = f"Added {count} new phone(s) (status: pending_otp)."
+        if count > 0 and self.main_window:
+            msg = f"Imported {count} accounts! Tab refreshed."
+            self.frame.after(0, self.main_window.refresh_account_tab)
         self._manual_status.config(
-            text=f"Added {count} new phone(s) (status: pending_otp).",
+            text=msg,
             fg=GREEN if count > 0 else MUTED,
         )
 
