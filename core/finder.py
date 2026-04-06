@@ -17,6 +17,7 @@ from telethon.tl.types import ChannelParticipantsSearch
 from core.config import (
     GROUPS_DB, SESSIONS_DIR, get_api_id, get_api_hash,
     save_group_search_result, list_group_search_results,
+    save_search_history_entry,
 )
 from core.account import _session_path
 from core.group_detector import is_group as _is_group, get_entity_type
@@ -321,4 +322,88 @@ def export_found_groups_txt(file_path: str) -> tuple[bool, str]:
         return True, f"Exported {len(groups)} groups to {file_path}"
     except Exception as e:
         return False, str(e)
+
+
+def export_found_groups_txt_full(file_path: str) -> tuple[bool, str]:
+    """Export found groups to TXT with full details."""
+    groups = list_group_search_results()
+    if not groups:
+        return False, "No groups found yet."
+    try:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(f"FINDER RESULTS - {date_str}\n")
+            f.write(f"Found {len(groups)} groups\n\n")
+            for i, g in enumerate(groups, 1):
+                members = g.get("member_count", 0)
+                members_str = f"{members:,}" if members else "?"
+                status = "Joined" if g.get("joined") else "New"
+                f.write(f"{i}. {g.get('group_title', 'Unknown')} (ID: {g.get('id', '?')})\n")
+                f.write(f"   Members: {members_str}\n")
+                f.write(f"   Link: {g.get('group_link', '')}\n")
+                f.write(f"   Status: {status}\n\n")
+        return True, f"Exported {len(groups)} groups to {file_path}"
+    except Exception as e:
+        return False, str(e)
+
+
+def export_found_groups_csv_file(file_path: str) -> tuple[bool, str]:
+    """Export found groups to CSV file with full columns."""
+    groups = list_group_search_results()
+    if not groups:
+        return False, "No groups found yet."
+    try:
+        fieldnames = ["id", "group_title", "member_count", "group_link", "is_group", "joined", "keyword", "found_at"]
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for g in groups:
+                row = {k: g.get(k, "") for k in fieldnames}
+                row["joined"] = "Joined" if row.get("joined") else "New"
+                writer.writerow(row)
+        return True, f"Exported {len(groups)} groups to {file_path}"
+    except Exception as e:
+        return False, str(e)
+
+
+def export_found_groups_json_file(file_path: str) -> tuple[bool, str]:
+    """Export found groups to JSON file."""
+    groups = list_group_search_results()
+    if not groups:
+        return False, "No groups found yet."
+    try:
+        export_data = []
+        for g in groups:
+            export_data.append({
+                "id": g.get("id", ""),
+                "name": g.get("group_title", ""),
+                "members": g.get("member_count", 0),
+                "link": g.get("group_link", ""),
+                "is_group": bool(g.get("is_group", True)),
+                "status": "Joined" if g.get("joined") else "New",
+                "keyword": g.get("keyword", ""),
+                "found_at": g.get("found_at", ""),
+            })
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, ensure_ascii=False, indent=2)
+        return True, f"Exported {len(groups)} groups to {file_path}"
+    except Exception as e:
+        return False, str(e)
+
+
+def auto_append_found_groups_txt(groups: list[dict], txt_path: Path | str) -> int:
+    """Append a list of group links to a TXT file. Returns count of links actually written."""
+    written = 0
+    try:
+        txt_path = Path(txt_path)
+        txt_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(txt_path, "a", encoding="utf-8") as f:
+            for g in groups:
+                link = g.get("group_link", "")
+                if link:
+                    f.write(link + "\n")
+                    written += 1
+        return written
+    except Exception:
+        return 0
 

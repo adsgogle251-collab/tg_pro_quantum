@@ -86,6 +86,15 @@ def init_databases():
                 created_at     TEXT DEFAULT (datetime('now'))
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS search_history (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                query         TEXT NOT NULL,
+                results_count INTEGER DEFAULT 0,
+                created_at    TEXT DEFAULT (datetime('now')),
+                export_path   TEXT DEFAULT ''
+            )
+        """)
         conn.commit()
 
     # Broadcasts DB
@@ -220,6 +229,30 @@ def mark_group_search_joined(group_link: str):
             (group_link,)
         )
         conn.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Search history helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def save_search_history_entry(query: str, results_count: int, export_path: str = ""):
+    """Save a search query to history."""
+    now = datetime.utcnow().isoformat()
+    with _get_conn(GROUPS_DB) as conn:
+        conn.execute("""
+            INSERT INTO search_history (query, results_count, created_at, export_path)
+            VALUES (?, ?, ?, ?)
+        """, (query, results_count, now, export_path))
+        conn.commit()
+
+
+def list_search_history() -> list[dict]:
+    """Return the most recent search history entries (newest first)."""
+    with _get_conn(GROUPS_DB) as conn:
+        rows = conn.execute(
+            "SELECT * FROM search_history ORDER BY created_at DESC LIMIT 50"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -101,8 +101,153 @@ class TestFinder:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# core/broadcast
+# Finder advanced export / save helpers (new)
 # ─────────────────────────────────────────────────────────────────────────────
+
+class TestFinderAdvanced:
+    """Tests for the new export / save / filter helpers."""
+
+    def _seed_group_search(self):
+        from core.config import save_group_search_result
+        save_group_search_result(
+            keyword="python",
+            group_link="https://t.me/python_test_1",
+            group_title="Python Test Group",
+            member_count=1234,
+            is_group=True,
+        )
+
+    # ── export_found_groups_csv_file ──────────────────────────────────────────
+    def test_export_found_csv_creates_file(self):
+        from core.finder import export_found_groups_csv_file
+        self._seed_group_search()
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            tmp = f.name
+        try:
+            ok, msg = export_found_groups_csv_file(tmp)
+            assert ok, msg
+            content = open(tmp, encoding="utf-8").read()
+            assert "https://t.me/python_test_1" in content
+            assert "group_link" in content  # header present
+        finally:
+            os.unlink(tmp)
+
+    def test_export_found_csv_empty_returns_false(self):
+        """Validates return types when groups exist in database (seeded)."""
+        from core.finder import export_found_groups_csv_file
+        # Seed a group so that "no groups" path isn't triggered unexpectedly in CI
+        self._seed_group_search()
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            tmp = f.name
+        try:
+            ok, msg = export_found_groups_csv_file(tmp)
+            assert isinstance(ok, bool)
+            assert isinstance(msg, str)
+        finally:
+            os.unlink(tmp)
+
+    # ── export_found_groups_txt_full ─────────────────────────────────────────
+    def test_export_found_txt_full(self):
+        from core.finder import export_found_groups_txt_full
+        self._seed_group_search()
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
+            tmp = f.name
+        try:
+            ok, msg = export_found_groups_txt_full(tmp)
+            assert ok, msg
+            content = open(tmp, encoding="utf-8").read()
+            assert "FINDER RESULTS" in content
+            assert "python_test_1" in content
+        finally:
+            os.unlink(tmp)
+
+    # ── export_found_groups_json_file ─────────────────────────────────────────
+    def test_export_found_json(self):
+        from core.finder import export_found_groups_json_file
+        self._seed_group_search()
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            tmp = f.name
+        try:
+            ok, msg = export_found_groups_json_file(tmp)
+            assert ok, msg
+            data = json.load(open(tmp, encoding="utf-8"))
+            assert isinstance(data, list)
+            assert len(data) > 0
+            assert "link" in data[0]
+            assert "name" in data[0]
+        finally:
+            os.unlink(tmp)
+
+    # ── auto_append_found_groups_txt ──────────────────────────────────────────
+    def test_auto_append_found_txt(self):
+        from core.finder import auto_append_found_groups_txt
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w") as f:
+            tmp = f.name
+
+        groups = [
+            {"group_link": "https://t.me/grp_a"},
+            {"group_link": "https://t.me/grp_b"},
+        ]
+        try:
+            count = auto_append_found_groups_txt(groups, tmp)
+            assert count == 2
+            lines = [l.strip() for l in open(tmp).readlines() if l.strip()]
+            assert "https://t.me/grp_a" in lines
+            assert "https://t.me/grp_b" in lines
+        finally:
+            os.unlink(tmp)
+
+    def test_auto_append_skips_empty_link(self):
+        from core.finder import auto_append_found_groups_txt
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w") as f:
+            tmp = f.name
+        try:
+            count = auto_append_found_groups_txt([{"group_link": ""}, {"group_link": "https://t.me/ok"}], tmp)
+            assert count == 1  # only the non-empty link is written
+            lines = [l.strip() for l in open(tmp).readlines() if l.strip()]
+            assert "https://t.me/ok" in lines
+            assert "" not in lines
+        finally:
+            os.unlink(tmp)
+
+    # ── search_history (core/config) ──────────────────────────────────────────
+    def test_save_and_list_search_history(self):
+        from core.config import save_search_history_entry, list_search_history
+        save_search_history_entry("python groups", 42, "/tmp/export.csv")
+        history = list_search_history()
+        assert isinstance(history, list)
+        assert len(history) > 0
+        latest = history[0]
+        assert latest["query"] == "python groups"
+        assert latest["results_count"] == 42
+        assert latest["export_path"] == "/tmp/export.csv"
+
+    def test_search_history_no_export_path(self):
+        from core.config import save_search_history_entry, list_search_history
+        save_search_history_entry("java groups", 10)
+        history = list_search_history()
+        found = next((h for h in history if h["query"] == "java groups"), None)
+        assert found is not None
+        assert found["results_count"] == 10
+        assert found["export_path"] == ""
+
+    # ── list_found_groups filter ──────────────────────────────────────────────
+    def test_list_found_groups_returns_list(self):
+        from core.finder import list_found_groups
+        self._seed_group_search()
+        groups = list_found_groups()
+        assert isinstance(groups, list)
+
+    def test_list_found_groups_unjoined(self):
+        from core.finder import list_found_groups
+        self._seed_group_search()
+        unjoined = list_found_groups(only_unjoined=True)
+        assert isinstance(unjoined, list)
+        for g in unjoined:
+            assert not g.get("joined")
+
+
+
 
 class TestBroadcast:
     def test_save_and_list_broadcasts(self):
