@@ -223,6 +223,7 @@ class OTPDialog(tk.Toplevel):
     """
 
     _PLACEHOLDER_COLOR = "#9099B7"   # muted text for placeholder hints
+    _PHONE_PLACEHOLDER = "+1234567890"  # neutral example phone number
 
     def __init__(self, parent, on_success=None):
         super().__init__(parent)
@@ -275,12 +276,12 @@ class OTPDialog(tk.Toplevel):
             font=FONTS["subheading"], relief="flat",
         )
         self._phone_entry.pack(fill="x", ipady=7, pady=(4, 2))
-        self._phone_entry.insert(0, "+6281234567")
+        self._phone_entry.insert(0, self._PHONE_PLACEHOLDER)
         self._phone_entry.bind("<FocusIn>",  self._phone_focus_in)
         self._phone_entry.bind("<FocusOut>", self._phone_focus_out)
 
         tk.Label(
-            self._container, text="Example: +6281234567890  or  +19175550100",
+            self._container, text="Example: +12025550100  or  +6281234567890",
             font=FONTS["small"], fg=MUTED, bg=BG, anchor="w",
         ).pack(fill="x", pady=(0, 12))
 
@@ -327,8 +328,7 @@ class OTPDialog(tk.Toplevel):
         self._otp_entry = tk.Entry(
             self._otp_frame, textvariable=self._otp_var,
             bg=CARD, fg=TEXT, insertbackground=TEXT,
-            font=("Consolas", 18, "bold"), relief="flat",
-            justify="center",
+            font=("Courier New", 18, "bold"), justify="center",
         )
         self._otp_entry.pack(fill="x", ipady=10, pady=(4, 4))
 
@@ -403,7 +403,7 @@ class OTPDialog(tk.Toplevel):
     def _phone_focus_out(self, _event=None):
         if not self._phone_var.get().strip():
             self._phone_entry.config(fg=self._PLACEHOLDER_COLOR)
-            self._phone_entry.insert(0, "+6281234567")
+            self._phone_entry.insert(0, self._PHONE_PLACEHOLDER)
 
     # ── Status helper ─────────────────────────────────────────────────────────
     def _set_status(self, text: str, color: str = OTP_COLOR_INFO):
@@ -445,7 +445,7 @@ class OTPDialog(tk.Toplevel):
     def _do_send_otp(self):
         phone = self._phone_var.get().strip()
         # Treat placeholder value as empty
-        if not phone or phone == "+6281234567":
+        if not phone or phone == self._PHONE_PLACEHOLDER:
             messagebox.showwarning("Missing", "Please enter your phone number.", parent=self)
             self._phone_entry.focus()
             return
@@ -466,7 +466,7 @@ class OTPDialog(tk.Toplevel):
                     from core.account import _upsert_account, _session_path
                     sf = _session_path(phone) + ".session"
                     _upsert_account(name, phone, sf, "active")
-                    self._set_status(f"✅  Account '{name}' added (already authorised).", OTP_COLOR_SUCCESS)
+                    self._set_status(f"✅  Account '{name}' added (already authorized).", OTP_COLOR_SUCCESS)
                     self.after(1400, self._finish)
                     return
                 self._go_to_otp_step()
