@@ -3,7 +3,7 @@ core/account_health.py - Account health detection and scoring
 """
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Callable
 
 from telethon import TelegramClient
@@ -61,7 +61,7 @@ def get_health(phone: str) -> Optional[dict]:
 
 def upsert_health(phone: str, **kwargs):
     init_health_table()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     existing = get_health(phone)
     if existing is None:
         # insert

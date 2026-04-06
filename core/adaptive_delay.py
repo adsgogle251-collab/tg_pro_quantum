@@ -10,7 +10,11 @@ class AdaptiveDelay:
     """
     Manages join delay with adaptive flood detection.
 
-    Delay progression on flood:  base → 5 → 10 → 30 (exponential)
+    Delay progression on flood (multipliers applied to base):
+        base × 1  →  base × 2  →  base × 4  →  base × 10
+    Example with 'normal' preset (3s base):
+        3s  →  6s  →  12s  →  30s
+
     Auto-reset on consecutive successes.
 
     Presets:

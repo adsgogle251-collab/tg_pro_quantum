@@ -6,7 +6,7 @@ can be resumed from where they stopped.
 """
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Optional
@@ -71,7 +71,7 @@ class PersistentQueue:
         with self._lock:
             self._state = {
                 "session_id": session_id,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "status": "running",
                 "total_groups": len(groups),
                 "completed": 0,
@@ -127,7 +127,7 @@ class PersistentQueue:
     def complete(self):
         with self._lock:
             self._state["status"] = "completed"
-            self._state["completed_at"] = datetime.utcnow().isoformat()
+            self._state["completed_at"] = datetime.now(timezone.utc).isoformat()
             self._save()
 
     def stop(self):

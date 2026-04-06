@@ -665,24 +665,33 @@ class JoinTab:
         self._refresh_log(stats.log)
 
     def _refresh_log(self, log_entries: list):
-        """Efficiently refresh log from stats.log list (newest first already)."""
-        # We keep our own count to avoid redundant refreshes
+        """Efficiently refresh log from stats.log list (newest first already).
+
+        stats.log uses insert(0, ...) so index 0 is always newest.
+        New entries since last refresh are at the head of the list:
+          new_entries = log_entries[:len - previous_count]
+        We insert them in reverse (oldest-of-new first) so that after all
+        inserts the newest entry sits at the top of the text widget.
+        """
         current_count = getattr(self, "_last_log_count", 0)
-        new_entries = log_entries[:len(log_entries) - current_count]
-        if not new_entries:
+        total = len(log_entries)
+        new_count = total - current_count
+        if new_count <= 0:
             return
-        self._last_log_count = len(log_entries)
+        new_entries = log_entries[:new_count]  # newest-first slice of new items
+        self._last_log_count = total
         self._log_text.config(state="normal")
-        for entry in new_entries:
-            tag   = entry.get("level", "info")
-            ts    = entry.get("ts", "")
-            msg   = entry.get("msg", "")
-            line  = f"[{ts}] {msg}\n"
+        # Insert in reverse order so the newest entry ends up at line 1
+        for entry in reversed(new_entries):
+            tag  = entry.get("level", "info")
+            ts   = entry.get("ts", "")
+            msg  = entry.get("msg", "")
+            line = f"[{ts}] {msg}\n"
             self._log_text.insert("1.0", line, tag)
-        # Trim
+        # Trim to keep memory bounded
         lines = int(self._log_text.index("end-1c").split(".")[0])
         if lines > 800:
-            self._log_text.delete(f"{800}.0", "end")
+            self._log_text.delete(f"800.0", "end")
         self._log_text.config(state="disabled")
 
     def _append_log(self, msg: str, level: str = "info"):

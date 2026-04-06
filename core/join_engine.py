@@ -19,18 +19,18 @@ from typing import Callable, Optional
 
 from telethon import TelegramClient
 from telethon.errors import (
-    FloodWaitError,
-    UserAlreadyParticipantError,
-    InviteHashExpiredError,
-    ChannelPrivateError,
-    UserBannedInChannelError,
-    ChatAdminRequiredError,
-    UserRestrictedError,
     AuthKeyUnregisteredError,
-    SessionExpiredError,
-    UserDeactivatedError,
-    UserDeactivatedBanError,
+    ChannelPrivateError,
+    ChatAdminRequiredError,
     ChatWriteForbiddenError,
+    FloodWaitError,
+    InviteHashExpiredError,
+    SessionExpiredError,
+    UserAlreadyParticipantError,
+    UserBannedInChannelError,
+    UserDeactivatedBanError,
+    UserDeactivatedError,
+    UserRestrictedError,
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, DeleteChatUserRequest
@@ -239,7 +239,9 @@ class JoinEngine:
             self.queue.resume()
         else:
             # Sort accounts by health (healthiest first)
-            sorted_phones = get_sorted_by_health([a["phone"] if isinstance(a, dict) else a for a in accounts])
+            sorted_phones = get_sorted_by_health(
+                [a.get("phone") or a.get("name", "") if isinstance(a, dict) else a for a in accounts]
+            )
             self.queue.create_session(groups, sorted_phones)
 
         self.stats = JoinStats(total=self.queue.state.get("total_groups", len(groups)))
