@@ -212,7 +212,7 @@ def list_group_search_results(only_unjoined: bool = False) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def mark_group_search_joined(group_link: str, account_phone: str = ""):
+def mark_group_search_joined(group_link: str):
     """Mark a found group as joined."""
     with _get_conn(GROUPS_DB) as conn:
         conn.execute(
@@ -238,7 +238,7 @@ def save_account_group(phone: str, group_link: str):
                 joined_at = excluded.joined_at
         """, (phone, group_link, now))
         conn.commit()
-    mark_group_search_joined(group_link, phone)
+    mark_group_search_joined(group_link)
 
 
 def list_account_groups(phone: str) -> list[dict]:

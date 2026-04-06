@@ -29,6 +29,8 @@ class BroadcastTab:
         self.parent = parent
         self.main_window = main_window
         self.frame = ttk.Frame(parent)
+        self._accounts_data: list = []
+        self._groups_data: list = []
         self._build()
         self._reload_accounts()
         self._reload_groups()
@@ -210,7 +212,7 @@ class BroadcastTab:
         if source == "account_groups":
             groups = []
             seen = set()
-            for acct in (self._accounts_data if hasattr(self, "_accounts_data") else list_accounts()):
+            for acct in self._accounts_data:
                 for ag in list_account_groups(acct["phone"]):
                     link = ag.get("group_link", "")
                     if link and link not in seen:

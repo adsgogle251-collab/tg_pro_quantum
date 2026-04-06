@@ -1,6 +1,7 @@
 """
 gui/import_tab.py - 4 session/phone import methods
 """
+import asyncio
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
@@ -266,23 +267,7 @@ class ImportTab:
             messagebox.showinfo("OTP", "No pending accounts to send OTP to.")
             return
         phones = [a["phone"] for a in pending]
-        self._txt_status.config(text=f"Sending OTP to {len(phones)} accounts…", fg=MUTED)
-
-        import asyncio
-
-        def _run():
-            loop = asyncio.new_event_loop()
-            try:
-                results = loop.run_until_complete(send_otp_batch(phones))
-            finally:
-                loop.close()
-            ok = sum(1 for _, s, _ in results if s)
-            self._txt_status.config(
-                text=f"OTP sent: {ok}/{len(results)} successful.",
-                fg=GREEN if ok > 0 else RED,
-            )
-
-        threading.Thread(target=_run, daemon=True).start()
+        self._send_otp_to_phones(phones, self._txt_status)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Sub-tab 4: Manual Add
@@ -335,9 +320,11 @@ class ImportTab:
             messagebox.showinfo("OTP", "No pending accounts.")
             return
         phones = [a["phone"] for a in pending]
-        self._manual_status.config(text=f"Sending OTP to {len(phones)} accounts…", fg=MUTED)
+        self._send_otp_to_phones(phones, self._manual_status)
 
-        import asyncio
+    def _send_otp_to_phones(self, phones: list[str], status_label: tk.Label):
+        """Shared helper: send OTP batch and update the given status label."""
+        status_label.config(text=f"Sending OTP to {len(phones)} accounts…", fg=MUTED)
 
         def _run():
             loop = asyncio.new_event_loop()
@@ -346,7 +333,7 @@ class ImportTab:
             finally:
                 loop.close()
             ok = sum(1 for _, s, _ in results if s)
-            self._manual_status.config(
+            status_label.config(
                 text=f"OTP sent: {ok}/{len(results)} successful.",
                 fg=GREEN if ok > 0 else RED,
             )

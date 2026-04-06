@@ -20,6 +20,8 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from core.config import get_api_id, get_api_hash, save_account_group, list_group_search_results
 from core.account import list_accounts, _session_path, update_account_status
 
+MAX_FLOOD_WAIT = 60  # seconds: cap on flood-wait sleep duration
+
 
 class JoinProgress:
     def __init__(self, total: int):
@@ -148,7 +150,7 @@ class JoinManager:
 
                 except FloodWaitError as e:
                     self.progress.add_log(f"⏳ {phone}: flood wait {e.seconds}s")
-                    await asyncio.sleep(min(e.seconds, 60))
+                    await asyncio.sleep(min(e.seconds, MAX_FLOOD_WAIT))
                     self.progress.failed += 1
 
                 await client.disconnect()
