@@ -497,10 +497,10 @@ class FinderTab:
         for g in list_found_groups():
             existing_set.add(g.get("group_link", ""))
 
-        _pending_save: list[dict] = []   # buffer for auto-save batching
+        pending_save: list[dict] = []   # buffer for auto-save batching
 
         def search():
-            nonlocal _pending_save
+            nonlocal pending_save
             total_keywords = len(self.generated_keywords)
 
             for i, keyword in enumerate(self.generated_keywords):
@@ -534,7 +534,7 @@ class FinderTab:
                         "is_new":   True,
                     }
                     self.found_groups.append(group_data)
-                    _pending_save.append(group_data)
+                    pending_save.append(group_data)
 
                     # Save to valid.txt
                     if self.auto_save_var.get():
@@ -555,9 +555,9 @@ class FinderTab:
                     self.frame.after(0, lambda gd=group_data: self._add_result_live(gd))
 
                     # Auto-save every 10 groups
-                    if self.auto_save_var.get() and len(_pending_save) >= 10:
-                        saved_batch = list(_pending_save)
-                        _pending_save.clear()
+                    if self.auto_save_var.get() and len(pending_save) >= 10:
+                        saved_batch = list(pending_save)
+                        pending_save.clear()
                         n_saved = self._do_autosave(saved_batch)
                         self._session_saved_count += n_saved
                         self.frame.after(0, self._update_bottom_status)
@@ -571,10 +571,10 @@ class FinderTab:
                 time.sleep(0.1)
 
             # Save any remaining pending groups
-            if _pending_save and self.auto_save_var.get():
-                n_saved = self._do_autosave(_pending_save)
+            if pending_save and self.auto_save_var.get():
+                n_saved = self._do_autosave(pending_save)
                 self._session_saved_count += n_saved
-                _pending_save.clear()
+                pending_save.clear()
 
             # Save search history entry
             seed_kws = self.keyword_entry.get("1.0", "end-1c").strip()[:200]
@@ -712,7 +712,7 @@ class FinderTab:
 
         self._update_count_label(total=len(self.all_db_groups), shown=len(filtered))
 
-    def _update_count_label(self, total: int | None = None, shown: int | None = None):
+    def _update_count_label(self, total: int = None, shown: int = None):
         if total is None:
             total = len(self.all_db_groups)
         if shown is None:

@@ -133,7 +133,7 @@ class TestFinderAdvanced:
             os.unlink(tmp)
 
     def test_export_found_csv_empty_returns_false(self):
-        """If there are no groups at all this test may pass if seeded; just check return type."""
+        """Validates return types when groups exist in database (seeded)."""
         from core.finder import export_found_groups_csv_file
         # Seed a group so that "no groups" path isn't triggered unexpectedly in CI
         self._seed_group_search()
