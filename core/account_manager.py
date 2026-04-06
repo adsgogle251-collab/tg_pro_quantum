@@ -229,6 +229,10 @@ class AccountManager:
         return self.account_groups.copy()
     
     def get_group_accounts(self, group_name: str) -> List[str]:
+        if group_name in ("Semua Akun", "All Accounts"):
+            all_names = [acc["name"] for acc in self.get_all() if acc.get("name")]
+            log(f"get_group_accounts('{group_name}'): returning all {len(all_names)} accounts", "debug")
+            return all_names
         groups = self.load_groups()
         accounts = groups.get(group_name, [])
         log(f"get_group_accounts('{group_name}'): found {len(accounts)} accounts", "debug")
