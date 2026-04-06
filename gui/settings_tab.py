@@ -176,18 +176,24 @@ class SettingsTab:
             try:
                 from telethon.sync import TelegramClient as SyncClient
                 import tempfile, os
-                tmp = tempfile.mktemp()
+                # Use a secure named temp dir for the session file
+                tmp_dir = tempfile.mkdtemp(prefix="tg_api_test_")
+                tmp = os.path.join(tmp_dir, "test_session")
                 client = SyncClient(tmp, int(api_id), api_hash)
                 client.connect()
                 client.disconnect()
-                # Clean up temp session
-                for ext in (".session", ".session-journal"):
+                # Clean up temp session directory
+                for ext in ("", ".session", ".session-journal"):
                     p = tmp + ext
                     if os.path.exists(p):
                         try:
                             os.unlink(p)
                         except OSError:
                             pass
+                try:
+                    os.rmdir(tmp_dir)
+                except OSError:
+                    pass
                 self.frame.after(0, lambda: self._status_var.set("✅ API connection OK!"))
             except Exception as e:
                 self.frame.after(0, lambda: self._status_var.set(f"❌ Error: {e}"))

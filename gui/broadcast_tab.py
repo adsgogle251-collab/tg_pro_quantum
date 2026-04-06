@@ -28,15 +28,13 @@ class BroadcastTab:
         self.parent = parent
         self.main_window = main_window
         self.frame = ttk.Frame(parent)
-        # Selected items (stored as sets of identifiers)
-        self._selected_groups:   set[str] = set()
-        self._selected_accounts: set[str] = set()
         self._build()
         self._reload_accounts()
         self._reload_groups()
 
     # ─────────────────────────────────────────────────────────────────────────
     def _build(self):
+
         outer = tk.Frame(self.frame, bg=BG)
         outer.pack(fill="both", expand=True, padx=20, pady=20)
 
