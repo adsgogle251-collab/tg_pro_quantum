@@ -301,14 +301,20 @@ class AccountTab:
     # ═══════════════════════════════════════════════════════
     
     def _select_all(self):
+        for acc in self.filtered_accounts:
+            account_name = acc.get("name", "")
+            if account_name and account_name not in self.selected_accounts:
+                self.selected_accounts.append(account_name)
         for item in self.tree.get_children():
             self.tree.set(item, "#1", "☑")
-        self._update_selected_from_checkboxes()
+        count = len(self.selected_accounts)
+        self.feature_count_label.config(text=f"Selected: {count}")
     
     def _deselect_all(self):
+        self.selected_accounts = []
         for item in self.tree.get_children():
             self.tree.set(item, "#1", "☐")
-        self._update_selected_from_checkboxes()
+        self.feature_count_label.config(text="Selected: 0")
     
     def _on_tree_click(self, event):
         region = self.tree.identify("region", event.x, event.y)
@@ -326,11 +332,16 @@ class AccountTab:
                 return "break"
     
     def _update_selected_from_checkboxes(self):
-        self.selected_accounts = []
         for item in self.tree.get_children():
             values = self.tree.item(item, "values")
-            if values and values[0] == "☑":
-                self.selected_accounts.append(values[1])
+            if values:
+                account_name = values[1]
+                if values[0] == "☑":
+                    if account_name not in self.selected_accounts:
+                        self.selected_accounts.append(account_name)
+                else:
+                    if account_name in self.selected_accounts:
+                        self.selected_accounts.remove(account_name)
         count = len(self.selected_accounts)
         self.feature_count_label.config(text=f"Selected: {count}")
     
@@ -408,9 +419,13 @@ class AccountTab:
             features = account_manager.get_account_features(acc.get("name", ""))
             features_display = ", ".join(features) if features else "-"
             
+            account_name = acc.get("name", "")
+            is_selected = account_name in self.selected_accounts
+            checkbox = "☑" if is_selected else "☐"
+
             self.tree.insert("", "end", values=(
-                "☐", 
-                acc.get("name", ""), 
+                checkbox,
+                account_name,
                 acc.get("phone", ""),
                 acc.get("level", 1), 
                 session_status,
